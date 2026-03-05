@@ -27,7 +27,7 @@
     "validate": "office-addin-manifest validate manifest.xml",
     "watch": "webpack --mode development --watch",
     "preversion": "npm test",
-    "version": "node scripts/sync-manifest-version.js && git add manifest.xml",
+    "version": "node scripts/sync-manifest-version.js && git add manifest.xml manifest.dev.xml src/taskpane/taskpane.html",
     "postversion": "git push && git push --tags"
   },
   "dependencies": {
