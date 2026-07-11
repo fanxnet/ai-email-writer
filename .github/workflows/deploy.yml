@@ -51,7 +51,7 @@ jobs:
       - name: Patch manifest for dev environment
         run: |
           sed -i \
-            -e 's|https://rizonesoft.github.io/ai-email-writer/|https://rizonesoft.github.io/ai-email-writer/dev/|g' \
+            -e 's|https://fanxnet.github.io/ai-email-writer/|https://fanxnet.github.io/ai-email-writer/dev/|g' \
             -e 's|a81c3d4e-5f67-4890-ab12-cd34ef56ab78|b72d4e5f-6a89-4b01-cd23-ef45ab67cd89|' \
             -e 's|DefaultValue="AI Compose"|DefaultValue="AI Compose (Dev)"|g' \
             -e 's|Open the AI Compose assistant panel.|Open the AI Compose assistant panel (development build).|' \
@@ -82,5 +82,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           destination_dir: .
-          keep_files: true
+          keep_files: false
           exclude_assets: "dev/**"

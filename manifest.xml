@@ -2,16 +2,16 @@
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0" xsi:type="MailApp">
   <Id>a81c3d4e-5f67-4890-ab12-cd34ef56ab78</Id>
   <Version>1.3.2.0</Version>
-  <ProviderName>Rizonesoft</ProviderName>
+  <ProviderName>Fanxnet</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="AI Compose"/>
   <Description DefaultValue="AI-powered email writer and composer for Outlook, powered by Gemini."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-128.png"/>
-  <SupportUrl DefaultValue="https://rizonesoft.com/support"/>
+  <SupportUrl DefaultValue="https://fanxnet.com/support"/>
   <AppDomains>
-    <AppDomain>https://rizonesoft.com</AppDomain>
-    <AppDomain>https://rizonesoft.github.io</AppDomain>
+    <AppDomain>https://fanxnet.com</AppDomain>
+    <AppDomain>https://fanxnet.github.io</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Mailbox"/>
