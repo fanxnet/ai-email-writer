@@ -8,10 +8,11 @@
   <Description DefaultValue="AI-powered email writer and composer for Outlook, powered by Gemini."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-128.png"/>
-  <SupportUrl DefaultValue="https://fanxnet.com/support"/>
+  <SupportUrl DefaultValue="https://fanet.cloudns.ch/support"/>
   <AppDomains>
-    <AppDomain>https://fanxnet.com</AppDomain>
     <AppDomain>https://fanxnet.github.io</AppDomain>
+    <AppDomain>https://fanet.cloudns.ch</AppDomain>
+    <AppDomain>https://192.168.6.1</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Mailbox"/>
