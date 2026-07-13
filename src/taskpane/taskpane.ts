@@ -80,9 +80,9 @@ const $ = (id: string) => document.getElementById(id);
 /** Validate API key format based on selected provider. */
 function isValidApiKeyFormat(key: string, provider: 'gemini' | 'deepseek'): boolean {
   if (provider === 'gemini') {
-    return /^(AIza|AQ)[0-9A-Za-z_-]+$/.test(key);
+    return /^(?:AIza|AQ)/.test(key);
   }
-  return /^sk-[0-9A-Za-z_-]+$/.test(key);
+  return /^sk-/.test(key.trim());
 }
 
 function showElement(id: string): void {
