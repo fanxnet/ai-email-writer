@@ -10,7 +10,7 @@
 
 /* global Office */
 
-import { generateText } from '../services/gemini';
+import { generateText } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { IMPROVE_WRITING_PROMPT } from '../prompts/templates';
 import { getCurrentEmailBody, getItemMode } from '../services/outlook';

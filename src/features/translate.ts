@@ -7,7 +7,7 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateText, FAST_MODEL } from '../services/gemini';
+import { generateText, FAST_MODEL } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { TRANSLATE_PROMPT } from '../prompts/templates';
 import { getCurrentEmailBody } from '../services/outlook';

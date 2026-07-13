@@ -12,7 +12,7 @@
 
 /* global Office */
 
-import { generateText } from '../services/gemini';
+import { generateText } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { DRAFT_EMAIL_PROMPT } from '../prompts/templates';
 import { getItemMode } from '../services/outlook';

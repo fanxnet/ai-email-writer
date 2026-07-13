@@ -11,7 +11,9 @@
 
 import '../styles/main.css';
 import './taskpane.css';
-import { initGeminiClient, generateText, generateJson, Type } from '../services/gemini';
+import { initGeminiClient, Type } from '../services/gemini';
+import { initDeepSeekClient } from '../services/deepseek';
+import { generateText, generateJson } from '../services/ai-service';
 import { getItemMode } from '../services/outlook';
 import { buildGoalText, getTemplates, saveTemplate, deleteTemplate } from '../features/settings';
 import {
@@ -75,9 +77,12 @@ import {
 
 const $ = (id: string) => document.getElementById(id);
 
-/** Validate Google Gemini API key format (starts with AIza, 39 chars). */
-function isValidApiKeyFormat(key: string): boolean {
-  return /^AIza[0-9A-Za-z_-]{35}$/.test(key);
+/** Validate API key format based on selected provider. */
+function isValidApiKeyFormat(key: string, provider: 'gemini' | 'deepseek'): boolean {
+  if (provider === 'gemini') {
+    return /^(AIza|AQ)[0-9A-Za-z_-]+$/.test(key);
+  }
+  return /^sk-[0-9A-Za-z_-]+$/.test(key);
 }
 
 function showElement(id: string): void {
@@ -207,10 +212,13 @@ async function scoreEmail(text: string, scoreCardId: string): Promise<void> {
 
   try {
     console.log('[Score] Requesting score...');
+    const provider = loadSettings().aiProvider;
+    const scoreModel = provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-2.5-flash';
+
     const parsed = await generateJson<EmailScores>(
       `Score this email:\n\n${text.slice(0, 1500)}`,
       {
-        model: 'gemini-2.5-flash',
+        model: scoreModel,
         systemInstruction: 'You are an email quality scorer. Score emails on clarity, tone, conciseness, and call-to-action, each from 1 to 10.',
         temperature: 0.1,
         maxOutputTokens: 100,
@@ -267,6 +275,37 @@ async function scoreEmail(text: string, scoreCardId: string): Promise<void> {
   } catch (err) {
     console.warn('[Score] Failed:', err);
     if (valueEl) valueEl.textContent = '—';
+  }
+}
+
+function updateModelDropdown(provider: string, currentModel?: string): void {
+  const modelSelect = $('settings-model') as HTMLSelectElement | null;
+  if (!modelSelect) return;
+  modelSelect.innerHTML = '';
+
+  const models = provider === 'deepseek'
+    ? [
+        { value: 'deepseek-v4-flash', text: 'deepseek-v4-flash' },
+        { value: 'deepseek-v4-pro', text: 'deepseek-v4-pro' }
+      ]
+    : [
+        { value: 'gemini-3.5-flash', text: 'gemini-3.5-flash' },
+        { value: 'gemini-flash-latest', text: 'gemini-flash-latest' },
+        { value: 'gemini-flash-lite-latest', text: 'gemini-flash-lite-latest' },
+        { value: 'gemini-2.5-pro', text: 'gemini-2.5-pro' }
+      ];
+
+  models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.value;
+    opt.textContent = m.text;
+    modelSelect.appendChild(opt);
+  });
+
+  if (currentModel) {
+    modelSelect.value = currentModel;
+  } else {
+    modelSelect.value = provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-flash-latest';
   }
 }
 
@@ -1011,12 +1050,19 @@ Office.onReady((info) => {
       );
     }
 
-    // Load settings and initialize Gemini client from stored API key
+    // Load settings and initialize clients
     const settings = loadSettings();
     try {
-      const apiKey = settings.apiKey || (window as any).__AICompose_API_KEY__ || '';
-      if (apiKey) {
-        initGeminiClient(apiKey);
+      if (settings.aiProvider === 'deepseek') {
+        const apiKey = settings.deepseekApiKey || '';
+        if (apiKey) {
+          initDeepSeekClient(apiKey);
+        }
+      } else {
+        const apiKey = settings.geminiApiKey || (window as any).__AICompose_API_KEY__ || '';
+        if (apiKey) {
+          initGeminiClient(apiKey);
+        }
       }
     } catch {
       // Client will be initialized when settings are saved
@@ -1041,13 +1087,19 @@ Office.onReady((info) => {
       if (langSelect) langSelect.value = s.defaultLanguage;
 
       // Settings form itself
+      const sProvider = $('settings-provider') as HTMLSelectElement | null;
+      if (sProvider) sProvider.value = s.aiProvider;
+
+      updateModelDropdown(s.aiProvider, s.defaultModel);
+
       const sApiKey = $('settings-api-key') as HTMLInputElement | null;
-      const sModel = $('settings-model') as HTMLSelectElement | null;
+      if (sApiKey) {
+        sApiKey.value = s.aiProvider === 'deepseek' ? s.deepseekApiKey : s.geminiApiKey;
+      }
+
       const sTone = $('settings-tone') as HTMLSelectElement | null;
       const sStyle = $('settings-summary-style') as HTMLSelectElement | null;
       const sLang = $('settings-language') as HTMLSelectElement | null;
-      if (sApiKey) sApiKey.value = s.apiKey;
-      if (sModel) sModel.value = s.defaultModel;
       if (sTone) sTone.value = s.defaultTone;
       if (sStyle) sStyle.value = s.defaultSummaryStyle;
       if (sLang) sLang.value = s.defaultLanguage;
@@ -1261,6 +1313,17 @@ Office.onReady((info) => {
       }
     });
 
+    // API Provider change handler
+    $('settings-provider')?.addEventListener('change', () => {
+      const provider = ($('settings-provider') as HTMLSelectElement).value;
+      const currentSettings = loadSettings();
+      const apiKeyInput = $('settings-api-key') as HTMLInputElement | null;
+      if (apiKeyInput) {
+        apiKeyInput.value = provider === 'deepseek' ? currentSettings.deepseekApiKey : currentSettings.geminiApiKey;
+      }
+      updateModelDropdown(provider);
+    });
+
     // API key show/hide toggle
     $('btn-toggle-api-key')?.addEventListener('click', () => {
       const input = $('settings-api-key') as HTMLInputElement | null;
@@ -1281,26 +1344,33 @@ Office.onReady((info) => {
 
     // Save settings
     $('btn-save-settings')?.addEventListener('click', () => {
+      const provider = ($('settings-provider') as HTMLSelectElement)?.value as 'gemini' | 'deepseek' || 'gemini';
       const apiKey = ($('settings-api-key') as HTMLInputElement)?.value?.trim() || '';
-      const model = ($('settings-model') as HTMLSelectElement)?.value || 'gemini-3-flash-preview';
+      const model = ($('settings-model') as HTMLSelectElement)?.value || (provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-flash-latest');
       const tone = ($('settings-tone') as HTMLSelectElement)?.value || 'professional';
       const summaryStyle = ($('settings-summary-style') as HTMLSelectElement)?.value || 'bullets';
       const language = ($('settings-language') as HTMLSelectElement)?.value || 'English';
 
       // Validate API key format
       const keyError = $('api-key-error');
-      if (apiKey && !isValidApiKeyFormat(apiKey)) {
+      if (apiKey && !isValidApiKeyFormat(apiKey, provider)) {
         if (keyError) {
-          keyError.textContent = 'Invalid API key format. Keys typically start with "AIza" and are 39 characters long.';
+          keyError.textContent = provider === 'gemini'
+            ? 'Invalid API key format. Keys typically start with "AIza" or "AQ".'
+            : 'Invalid API key format. DeepSeek keys must start with "sk-".';
           keyError.classList.remove('hidden');
         }
         return;
       }
       if (keyError) keyError.classList.add('hidden');
 
+      const existing = loadSettings();
       const newSettings: AIComposeSettings = {
-        ...loadSettings(),
-        apiKey,
+        ...existing,
+        aiProvider: provider,
+        geminiApiKey: provider === 'gemini' ? apiKey : existing.geminiApiKey,
+        deepseekApiKey: provider === 'deepseek' ? apiKey : existing.deepseekApiKey,
+        apiKey: provider === 'gemini' ? apiKey : existing.apiKey,
         defaultModel: model,
         defaultTone: tone as any,
         defaultSummaryStyle: summaryStyle as any,
@@ -1327,6 +1397,7 @@ Office.onReady((info) => {
 
     // Test Connection button
     $('btn-test-connection')?.addEventListener('click', async () => {
+      const provider = ($('settings-provider') as HTMLSelectElement)?.value as 'gemini' | 'deepseek' || 'gemini';
       const apiKey = ($('settings-api-key') as HTMLInputElement)?.value?.trim() || '';
       const resultEl = $('test-connection-result');
       const keyError = $('api-key-error');
@@ -1342,9 +1413,11 @@ Office.onReady((info) => {
         }
         return;
       }
-      if (!isValidApiKeyFormat(apiKey)) {
+      if (!isValidApiKeyFormat(apiKey, provider)) {
         if (keyError) {
-          keyError.textContent = 'Invalid API key format. Keys typically start with "AIza" and are 39 characters long.';
+          keyError.textContent = provider === 'gemini'
+            ? 'Invalid API key format. Keys typically start with "AIza" or "AQ".'
+            : 'Invalid API key format. DeepSeek keys must start with "sk-".';
           keyError.classList.remove('hidden');
         }
         return;
@@ -1358,7 +1431,11 @@ Office.onReady((info) => {
       if (btn) btn.setAttribute('disabled', 'true');
 
       try {
-        initGeminiClient(apiKey);
+        if (provider === 'gemini') {
+          initGeminiClient(apiKey);
+        } else {
+          initDeepSeekClient(apiKey);
+        }
         try {
           await generateText('Say hello in one word.', {
             maxOutputTokens: 20,

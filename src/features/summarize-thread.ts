@@ -10,7 +10,7 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateText, FAST_MODEL } from '../services/gemini';
+import { generateText, FAST_MODEL } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { SUMMARIZE_THREAD_PROMPT } from '../prompts/templates';
 import {

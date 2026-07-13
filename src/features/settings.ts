@@ -8,6 +8,7 @@
  */
 
 import { initGeminiClient } from "../services/gemini";
+import { initDeepSeekClient } from "../services/deepseek";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,9 +22,15 @@ export type SummaryStyle = "bullets" | "paragraph" | "tldr";
 
 /** All persisted user preferences. */
 export interface AIComposeSettings {
+  /** Selected AI Provider: 'gemini' | 'deepseek' */
+  aiProvider: 'gemini' | 'deepseek';
   /** Google Gemini API key (stored in plain text in localStorage). */
+  geminiApiKey: string;
+  /** DeepSeek API key (stored in plain text in localStorage). */
+  deepseekApiKey: string;
+  /** Legacy API key fallback. */
   apiKey: string;
-  /** Gemini model to use for all features. */
+  /** Active model to use for all features. */
   defaultModel: string;
   /** Default tone for Draft Email and Reply. */
   defaultTone: Tone;
@@ -45,8 +52,11 @@ const STORAGE_KEY = "ai_compose_settings";
 const LEGACY_STORAGE_KEY = "glide_settings";
 
 const DEFAULT_SETTINGS: AIComposeSettings = {
+  aiProvider: "gemini",
+  geminiApiKey: "",
+  deepseekApiKey: "",
   apiKey: "",
-  defaultModel: "gemini-3-flash-preview",
+  defaultModel: "gemini-flash-latest",
   defaultTone: "professional",
   defaultSummaryStyle: "bullets",
   defaultLanguage: "English",
@@ -91,6 +101,10 @@ export function loadSettings(): AIComposeSettings {
 
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<AIComposeSettings>;
+      // 迁移旧版单一 API Key
+      if (parsed.apiKey && !parsed.geminiApiKey) {
+        parsed.geminiApiKey = parsed.apiKey;
+      }
       cached = { ...DEFAULT_SETTINGS, ...parsed };
     } else {
       cached = { ...DEFAULT_SETTINGS };
@@ -107,7 +121,8 @@ export function loadSettings(): AIComposeSettings {
  * If the API key changed, automatically re-initializes the Gemini client.
  */
 export function saveSettings(settings: AIComposeSettings): void {
-  const previousKey = cached?.apiKey || "";
+  const previousGeminiKey = cached?.geminiApiKey || "";
+  const previousDeepseekKey = cached?.deepseekApiKey || "";
 
   cached = { ...settings };
 
@@ -117,10 +132,16 @@ export function saveSettings(settings: AIComposeSettings): void {
     // localStorage might be unavailable in some sandboxed environments
   }
 
-  // Re-initialize Gemini client if the API key changed
-  if (settings.apiKey && settings.apiKey !== previousKey) {
+  // 根据当前配置对应初始化底层模型客户端
+  if (settings.aiProvider === "gemini" && settings.geminiApiKey && settings.geminiApiKey !== previousGeminiKey) {
     try {
-      initGeminiClient(settings.apiKey);
+      initGeminiClient(settings.geminiApiKey);
+    } catch {
+      // Will be retried on next action
+    }
+  } else if (settings.aiProvider === "deepseek" && settings.deepseekApiKey && settings.deepseekApiKey !== previousDeepseekKey) {
+    try {
+      initDeepSeekClient(settings.deepseekApiKey);
     } catch {
       // Will be retried on next action
     }
@@ -131,7 +152,8 @@ export function saveSettings(settings: AIComposeSettings): void {
  * Get the current API key (loads settings if not cached).
  */
 export function getApiKey(): string {
-  return loadSettings().apiKey;
+  const s = loadSettings();
+  return s.aiProvider === 'deepseek' ? s.deepseekApiKey : s.geminiApiKey;
 }
 
 /**

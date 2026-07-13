@@ -1381,13 +1381,27 @@
           Settings
         </h2>
 
+        <!-- AI Provider -->
+        <div class="mb-lg">
+          <label
+            class="block text-sm font-medium text-aic-text-secondary mb-xs"
+            for="settings-provider"
+          >
+            AI Provider
+          </label>
+          <select id="settings-provider" class="aic-select">
+            <option value="gemini" selected>Google Gemini</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </div>
+
         <!-- API Key -->
         <div class="mb-lg">
           <label
             class="block text-sm font-medium text-aic-text-secondary mb-xs"
             for="settings-api-key"
           >
-            Gemini API Key
+            API Key
           </label>
           <div class="flex gap-xs">
             <input
@@ -1447,14 +1461,7 @@
             </button>
           </div>
           <p class="text-xs text-aic-text-tertiary mt-xs">
-            Get your key from
-            <a
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-aic-blue no-underline hover:underline"
-              >Google AI Studio</a
-            >
+            Enter your selected provider's API key.
           </p>
           <p
             id="api-key-error"
@@ -1484,30 +1491,19 @@
           <p id="test-connection-result" class="text-xs mt-xs hidden"></p>
         </div>
 
-        <!-- Gemini Model -->
+        <!-- AI Model -->
         <div class="mb-lg">
           <label
             class="block text-sm font-medium text-aic-text-secondary mb-xs"
             for="settings-model"
           >
-            Gemini Model
+            AI Model
           </label>
           <select id="settings-model" class="aic-select">
-            <optgroup label="Gemini 3.1 (latest)">
-              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
-            </optgroup>
-            <optgroup label="Gemini 3">
-              <option value="gemini-3-flash-preview" selected>Gemini 3 Flash</option>
-              <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
-            </optgroup>
-            <optgroup label="Gemini 2.5 (stable)">
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-            </optgroup>
+            <!-- Dynamically populated by JS -->
           </select>
           <p class="text-xs text-aic-text-tertiary mt-xs">
-            Flash models are faster and cheaper. Pro models offer deeper reasoning.
+            Select the model to use for generation.
           </p>
         </div>
 

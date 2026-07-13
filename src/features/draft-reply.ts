@@ -13,7 +13,7 @@
 
 /* global Office */
 
-import { generateText } from '../services/gemini';
+import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { REPLY_PROMPT } from '../prompts/templates';
 import {
