@@ -70,6 +70,12 @@ import {
   resetSettings,
   AIComposeSettings,
 } from '../features/settings';
+import {
+  autoSaveEntry,
+  getAutoInstructions,
+  getSessionKey,
+  AutoSaveType,
+} from '../features/auto-save';
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -423,6 +429,11 @@ function switchTab(tabName: string): void {
 
   hideError();
 
+  // Restore auto-saved instructions when entering an input tab
+  if (tabName === 'draft' || tabName === 'reply') {
+    restoreActiveInstructions();
+  }
+
   // Auto-load email context when switching to Reply tab
   if (tabName === 'reply') {
     loadReplyContext();
@@ -432,6 +443,41 @@ function switchTab(tabName: string): void {
 // ---------------------------------------------------------------------------
 // Reply context loader
 // ---------------------------------------------------------------------------
+
+/** Save both instruction inputs to the current email conversation. */
+function autoSaveSession(): void {
+  try {
+    const sessionKey = getSessionKey();
+    const draft = ($('draft-instructions') as HTMLTextAreaElement)?.value || '';
+    const reply = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
+    autoSaveEntry('draft', draft, sessionKey);
+    autoSaveEntry('reply', reply, sessionKey);
+  } catch {
+    // Best-effort autosave — never block closing the panel
+  }
+}
+
+/** Restore the auto-saved instructions into the currently active tab. */
+function restoreActiveInstructions(): void {
+  try {
+    const activeTab = document.querySelector('.aic-tab--active') as HTMLElement | null;
+    const tabName = activeTab?.dataset.tab;
+    let type: AutoSaveType = 'reply';
+    if (tabName === 'draft') type = 'draft';
+    else if (tabName !== 'reply') return;
+
+    const textarea = $(`${type}-instructions`) as HTMLTextAreaElement;
+    if (!textarea || textarea.value.trim()) return;
+
+    const saved = getAutoInstructions(type, getSessionKey());
+    if (saved) {
+      textarea.value = saved;
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  } catch {
+    // Best-effort restore
+  }
+}
 
 async function loadReplyContext(): Promise<void> {
   const senderEl = $('reply-sender');
@@ -1046,7 +1092,12 @@ Office.onReady((info) => {
     if (Office.context.mailbox) {
       Office.context.mailbox.addHandlerAsync(
         Office.EventType.ItemChanged,
-        () => { loadReplyContext(); },
+        () => {
+          // Persist the outgoing conversation before switching
+          autoSaveSession();
+          loadReplyContext();
+          restoreActiveInstructions();
+        },
       );
     }
 
@@ -1114,6 +1165,13 @@ Office.onReady((info) => {
     };
 
     applySettingsToForms(settings);
+
+    // Restore auto-saved instructions for the current conversation
+    restoreActiveInstructions();
+
+    // Persist instructions when the sidebar is closed / the add-in is unloaded
+    window.addEventListener('pagehide', autoSaveSession);
+    window.addEventListener('beforeunload', autoSaveSession);
 
     // --- Outlook theme detection (light/dark) ---
     try {
