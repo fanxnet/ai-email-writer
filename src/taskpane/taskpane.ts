@@ -1658,7 +1658,7 @@ Office.onReady((info) => {
       const deleteBtn = $('btn-delete-career') as HTMLButtonElement | null;
       if (!select) return;
       const careers = getCareers();
-      select.innerHTML = '<option value="">No career profile</option>';
+      select.innerHTML = '<option value="">Career profiles...</option>';
       careers.forEach((c) => {
         const opt = document.createElement('option');
         opt.value = c.id;
@@ -1679,23 +1679,54 @@ Office.onReady((info) => {
     });
 
     $('btn-save-career')?.addEventListener('click', () => {
-      const name = ($('career-name') as HTMLInputElement)?.value?.trim() || '';
       const description = ($('career-description') as HTMLTextAreaElement)?.value?.trim() || '';
-      if (!name || !description) {
-        showError('Enter both a name and a description before saving a career profile.');
+      if (!description) {
+        showError('Write a description first before saving as a career profile.');
         return;
       }
-      const career = saveCareer({ name, description });
-      const nameInput = $('career-name') as HTMLInputElement | null;
-      const descInput = $('career-description') as HTMLTextAreaElement | null;
-      if (nameInput) nameInput.value = '';
-      if (descInput) descInput.value = '';
-      descInput?.dispatchEvent(new Event('input'));
 
-      // Activate the newly saved profile immediately
-      const current = loadSettings();
-      saveSettings({ ...current, activeCareerId: career.id });
-      refreshCareerDropdown();
+      // Create inline name input (same flow as saving a template)
+      const select = $('career-active') as HTMLSelectElement;
+      const row = select?.parentElement;
+      if (!row) return;
+
+      // Check if input already showing
+      if (row.querySelector('.aic-template-name-input')) return;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'aic-select aic-template-select flex-1 aic-template-name-input';
+      input.placeholder = 'Career name...';
+      input.maxLength = 50;
+
+      // Hide select, show input
+      select.classList.add('hidden');
+      row.insertBefore(input, select);
+      input.focus();
+
+      const finish = (save: boolean): void => {
+        const name = input.value.trim();
+        input.remove();
+        select.classList.remove('hidden');
+        if (save && name) {
+          const career = saveCareer({ name, description });
+          const current = loadSettings();
+          saveSettings({ ...current, activeCareerId: career.id });
+          refreshCareerDropdown();
+
+          const descInput = $('career-description') as HTMLTextAreaElement | null;
+          if (descInput) {
+            descInput.value = '';
+            descInput.dispatchEvent(new Event('input'));
+          }
+        }
+      };
+
+      input.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter') finish(true);
+        if (e.key === 'Escape') finish(false);
+      });
+      input.addEventListener('blur', () => finish(true));
     });
 
     $('btn-delete-career')?.addEventListener('click', () => {

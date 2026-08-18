@@ -1572,52 +1572,33 @@
 
         <!-- Career Description -->
         <div class="mb-lg">
-          <label
-            class="block text-sm font-medium text-aic-text-secondary mb-xs"
-            for="career-active"
-          >
-            Career Description
-          </label>
+          <label class="block text-sm font-medium text-aic-text-secondary mb-xs" for="career-description">Career Description</label>
           <p class="text-xs text-aic-text-tertiary mb-sm">
-            The AI uses the selected career profile as background context when drafting
-            emails and replies. Save multiple profiles and pick one as the default.
+            The AI uses the selected career profile as background context when
+            drafting emails and replies. Save multiple profiles and pick one as the default.
           </p>
-          <div class="flex gap-xs mb-sm">
-            <select id="career-active" class="aic-select aic-template-select flex-1">
-              <option value="">No career profile</option>
+          <div class="flex items-center gap-xs mb-xs">
+            <select id="career-active" class="aic-select aic-template-select flex-1" title="Load a saved career profile">
+              <option value="" selected>Career profiles...</option>
             </select>
-            <button
-              id="btn-delete-career"
-              class="aic-btn aic-template-btn aic-template-btn--delete hidden"
-              title="Delete selected career"
-              type="button"
-            >
-              ×
+            <button id="btn-save-career" class="aic-btn aic-template-btn" title="Save as career profile">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
+            </button>
+            <button id="btn-delete-career" class="aic-btn aic-template-btn aic-template-btn--delete hidden" title="Delete career profile">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             </button>
           </div>
-          <div class="border border-aic-border rounded-sm p-sm">
-            <input
-              id="career-name"
-              class="aic-input w-full mb-sm"
-              placeholder="Career name (e.g. Senior Software Engineer)"
-              maxlength="50"
-              autocomplete="off"
-            />
-            <div class="relative">
-              <textarea
-                id="career-description"
-                class="aic-textarea w-full p-sm pr-lg border border-aic-border rounded-sm bg-aic-bg text-md text-aic-text font-aic resize-y min-h-[80px] focus:border-aic-blue focus:shadow-[0_0_0_2px_var(--color-aic-blue-glow)] outline-none transition-[border-color,box-shadow] duration-[var(--duration-aic)]"
-                rows="3"
-                placeholder="Describe this role, industry, expertise and expected tone..."
-                maxlength="1000"
-              ></textarea>
-              <button type="button" class="aic-btn-clear hidden" data-clear="career-description" title="Clear">×</button>
-            </div>
-            <span class="aic-char-count text-xs text-aic-text-tertiary mt-xs block text-right" data-for="career-description">0 / 1000</span>
-            <button id="btn-save-career" class="aic-btn aic-btn--secondary w-full mt-sm" type="button">
-              Save Career Profile
-            </button>
+          <div class="relative">
+            <textarea
+              id="career-description"
+              class="aic-textarea w-full p-sm pr-lg border border-aic-border rounded-sm bg-aic-bg text-md text-aic-text font-aic resize-y min-h-[80px] focus:border-aic-blue focus:shadow-[0_0_0_2px_var(--color-aic-blue-glow)] outline-none transition-[border-color,box-shadow] duration-[var(--duration-aic)]"
+              rows="4"
+              placeholder="Describe this role, industry, expertise and expected tone..."
+              maxlength="1000"
+            ></textarea>
+            <button type="button" class="aic-btn-clear hidden" data-clear="career-description" title="Clear">×</button>
           </div>
+          <span class="aic-char-count text-xs text-aic-text-tertiary mt-xs block text-right" data-for="career-description">0 / 1000</span>
         </div>
 
         <!-- Save button -->
