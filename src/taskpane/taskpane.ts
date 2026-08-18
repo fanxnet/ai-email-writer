@@ -1653,6 +1653,14 @@ Office.onReady((info) => {
     });
 
     // --- Career profile system ---
+    const loadCareerIntoTextarea = (id: string): void => {
+      const textarea = $('career-description') as HTMLTextAreaElement | null;
+      if (!textarea) return;
+      const career = getCareers().find((c) => c.id === id);
+      textarea.value = career ? career.description : '';
+      textarea.dispatchEvent(new Event('input'));
+    };
+
     const refreshCareerDropdown = (): void => {
       const select = $('career-active') as HTMLSelectElement | null;
       const deleteBtn = $('btn-delete-career') as HTMLButtonElement | null;
@@ -1668,6 +1676,7 @@ Office.onReady((info) => {
       const activeId = loadSettings().activeCareerId;
       select.value = careers.some((c) => c.id === activeId) ? activeId : '';
       deleteBtn?.classList.toggle('hidden', !select.value);
+      loadCareerIntoTextarea(select.value);
     };
 
     refreshCareerDropdown();
@@ -1676,6 +1685,7 @@ Office.onReady((info) => {
       const select = $('career-active') as HTMLSelectElement | null;
       const deleteBtn = $('btn-delete-career') as HTMLButtonElement | null;
       deleteBtn?.classList.toggle('hidden', !select?.value);
+      loadCareerIntoTextarea(select?.value || '');
     });
 
     $('btn-save-career')?.addEventListener('click', () => {
@@ -1713,12 +1723,6 @@ Office.onReady((info) => {
           const current = loadSettings();
           saveSettings({ ...current, activeCareerId: career.id });
           refreshCareerDropdown();
-
-          const descInput = $('career-description') as HTMLTextAreaElement | null;
-          if (descInput) {
-            descInput.value = '';
-            descInput.dispatchEvent(new Event('input'));
-          }
         }
       };
 
