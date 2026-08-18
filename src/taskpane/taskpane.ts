@@ -15,7 +15,7 @@ import { initGeminiClient, Type } from '../services/gemini';
 import { initDeepSeekClient } from '../services/deepseek';
 import { generateText, generateJson } from '../services/ai-service';
 import { getItemMode } from '../services/outlook';
-import { buildGoalText, getTemplates, saveTemplate, deleteTemplate } from '../features/settings';
+import { buildGoalText, getTemplates, saveTemplate, deleteTemplate, getCareers, saveCareer, deleteCareer } from '../features/settings';
 import {
   generateDraft,
   regenerateDraft,
@@ -1433,6 +1433,7 @@ Office.onReady((info) => {
         defaultTone: tone as any,
         defaultSummaryStyle: summaryStyle as any,
         defaultLanguage: language,
+        activeCareerId: ($('career-active') as HTMLSelectElement)?.value || '',
       };
 
       saveSettings(newSettings);
@@ -1649,6 +1650,60 @@ Office.onReady((info) => {
         deleteBtn?.classList.add('hidden');
         refreshTemplateDropdowns();
       });
+    });
+
+    // --- Career profile system ---
+    const refreshCareerDropdown = (): void => {
+      const select = $('career-active') as HTMLSelectElement | null;
+      const deleteBtn = $('btn-delete-career') as HTMLButtonElement | null;
+      if (!select) return;
+      const careers = getCareers();
+      select.innerHTML = '<option value="">No career profile</option>';
+      careers.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        select.appendChild(opt);
+      });
+      const activeId = loadSettings().activeCareerId;
+      select.value = careers.some((c) => c.id === activeId) ? activeId : '';
+      deleteBtn?.classList.toggle('hidden', !select.value);
+    };
+
+    refreshCareerDropdown();
+
+    $('career-active')?.addEventListener('change', () => {
+      const select = $('career-active') as HTMLSelectElement | null;
+      const deleteBtn = $('btn-delete-career') as HTMLButtonElement | null;
+      deleteBtn?.classList.toggle('hidden', !select?.value);
+    });
+
+    $('btn-save-career')?.addEventListener('click', () => {
+      const name = ($('career-name') as HTMLInputElement)?.value?.trim() || '';
+      const description = ($('career-description') as HTMLTextAreaElement)?.value?.trim() || '';
+      if (!name || !description) {
+        showError('Enter both a name and a description before saving a career profile.');
+        return;
+      }
+      const career = saveCareer({ name, description });
+      const nameInput = $('career-name') as HTMLInputElement | null;
+      const descInput = $('career-description') as HTMLTextAreaElement | null;
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      descInput?.dispatchEvent(new Event('input'));
+
+      // Activate the newly saved profile immediately
+      const current = loadSettings();
+      saveSettings({ ...current, activeCareerId: career.id });
+      refreshCareerDropdown();
+    });
+
+    $('btn-delete-career')?.addEventListener('click', () => {
+      const select = $('career-active') as HTMLSelectElement | null;
+      const id = select?.value;
+      if (!id) return;
+      deleteCareer(id);
+      refreshCareerDropdown();
     });
 
     // Custom goal field toggle

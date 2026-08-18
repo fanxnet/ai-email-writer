@@ -63,11 +63,12 @@ export function buildPrompt(template: string, variables: PromptVariables, append
     result = result.split(placeholder).join(value);
   }
 
-  // Append user-defined rules only for composition features (draft/reply)
+  // Append user-defined rules and the active career profile for composition features (draft/reply)
   if (appendRules) {
     try {
-      const { buildRulesText } = require('../features/settings');
+      const { buildRulesText, buildProfileText } = require('../features/settings');
       result += buildRulesText();
+      result += buildProfileText();
     } catch {
       // Settings module not available — skip rules injection
     }

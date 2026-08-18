@@ -42,6 +42,8 @@ export interface AIComposeSettings {
   presetRules: Record<string, boolean>;
   /** Free-text custom rules supplied by the user. */
   customRules: string;
+  /** ID of the active career profile (see getCareers / saveCareer). Empty = none. */
+  activeCareerId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
     useSimpleLanguage: false,
   },
   customRules: "",
+  activeCareerId: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -296,4 +299,61 @@ export function saveTemplate(template: Omit<EmailTemplate, 'id'>): EmailTemplate
 export function deleteTemplate(id: string): void {
   const templates = getTemplates().filter((t) => t.id !== id);
   localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+// ---------------------------------------------------------------------------
+// Career Profiles
+// ---------------------------------------------------------------------------
+
+const CAREERS_KEY = 'aic_careers';
+
+/** A saved career profile used to personalize drafted emails and replies. */
+export interface CareerProfile {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export function getCareers(): CareerProfile[] {
+  try {
+    const raw = localStorage.getItem(CAREERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCareer(career: Omit<CareerProfile, 'id'>): CareerProfile {
+  const careers = getCareers();
+  const newCareer: CareerProfile = {
+    ...career,
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+  };
+  careers.push(newCareer);
+  localStorage.setItem(CAREERS_KEY, JSON.stringify(careers));
+  return newCareer;
+}
+
+export function deleteCareer(id: string): void {
+  const careers = getCareers().filter((c) => c.id !== id);
+  localStorage.setItem(CAREERS_KEY, JSON.stringify(careers));
+  const settings = loadSettings();
+  if (settings.activeCareerId === id) {
+    saveSettings({ ...settings, activeCareerId: '' });
+  }
+}
+
+/**
+ * Build a "sender profile" section for composition prompts (draft/reply).
+ * Uses the active career profile's description. Returns '' when no profile
+ * is selected or the description is empty.
+ */
+export function buildProfileText(): string {
+  const settings = loadSettings();
+  if (!settings.activeCareerId) return '';
+
+  const career = getCareers().find((c) => c.id === settings.activeCareerId);
+  if (!career || !career.description.trim()) return '';
+
+  return `\n\nAbout the sender (career profile "${career.name}"):\n${career.description.trim()}\n\nWrite emails from this person's professional perspective and role, using relevant terminology.`;
 }

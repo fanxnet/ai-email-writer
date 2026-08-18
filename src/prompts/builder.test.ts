@@ -8,6 +8,13 @@
 
 import { buildPrompt, truncateContext, listPlaceholders } from './builder';
 
+// Mock the settings module so that dynamic require() inside buildPrompt
+// (appendRules path) is deterministic in tests.
+jest.mock('../features/settings', () => ({
+  buildRulesText: () => '\n\nAdditional rules:\n- Mock rule',
+  buildProfileText: () => '\n\nAbout the sender (career profile "Engineer"):\nI build software.',
+}));
+
 // ---------------------------------------------------------------------------
 // buildPrompt
 // ---------------------------------------------------------------------------
@@ -64,6 +71,18 @@ Line 3: {{C}}`;
 
   it('should throw for empty template', () => {
     expect(() => buildPrompt('', { NAME: 'test' })).toThrow('Prompt template cannot be empty');
+  });
+
+  it('should append rules and career profile when appendRules is true', () => {
+    const result = buildPrompt('Hello {{NAME}}', { NAME: 'Alice' }, true);
+    expect(result).toContain('Mock rule');
+    expect(result).toContain('career profile "Engineer"');
+    expect(result).toContain('I build software.');
+  });
+
+  it('should not append rules or career profile when appendRules is false (default)', () => {
+    const result = buildPrompt('Hello {{NAME}}', { NAME: 'Alice' });
+    expect(result).toBe('Hello Alice');
   });
 });
 
