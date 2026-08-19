@@ -547,26 +547,35 @@
         </div>
 
         <div class="mb-lg">
+          <!-- Conversation history panel (sits above the Show conversation button) -->
+          <div id="reply-conversation-panel" class="hidden mb-xs">
+            <div class="border border-aic-border rounded-sm bg-aic-bg p-sm">
+              <div class="flex items-center justify-between mb-sm">
+                <span class="text-sm font-medium text-aic-text-secondary">Conversation</span>
+                <button
+                  id="btn-clear-conversation"
+                  class="aic-btn aic-btn--ghost text-xs p-xs"
+                  title="Clear the conversation memory for this email"
+                  type="button"
+                >
+                  Clear conversation
+                </button>
+              </div>
+              <div id="reply-conv-summary" class="hidden mb-sm text-xs text-aic-text-tertiary leading-relaxed"></div>
+              <div id="reply-conv-list" class="flex flex-col gap-xs"></div>
+              <div id="reply-conv-empty" class="hidden text-xs text-aic-text-tertiary"></div>
+            </div>
+          </div>
           <div class="flex items-center justify-between mb-xs">
             <label class="block text-sm font-medium text-aic-text-secondary" for="reply-instructions">Reply instructions</label>
-            <div class="flex items-center gap-xs">
-              <button
-                id="btn-show-conversation"
-                class="aic-btn aic-btn--ghost text-xs p-xs"
-                title="Show or hide the conversation history saved for this email"
-                type="button"
-              >
-                Show conversation
-              </button>
-              <button
-                id="btn-clear-conversation"
-                class="aic-btn aic-btn--ghost text-xs p-xs"
-                title="Clear the conversation memory for this email"
-                type="button"
-              >
-                Clear conversation
-              </button>
-            </div>
+            <button
+              id="btn-show-conversation"
+              class="aic-btn aic-btn--ghost text-xs p-xs"
+              title="Show or hide the conversation history saved for this email"
+              type="button"
+            >
+              Show conversation
+            </button>
           </div>
           <span id="reply-conv-cleared-msg" class="hidden mb-xs block text-xs text-aic-success">✓ Conversation memory cleared</span>
           <span id="reply-conv-restore-msg" class="hidden mb-xs block text-xs text-aic-text-tertiary"></span>
@@ -592,30 +601,6 @@
             <button type="button" class="aic-btn-clear hidden" data-clear="reply-instructions" title="Clear">×</button>
           </div>
           <span class="aic-char-count text-xs text-aic-text-tertiary mt-xs block text-right" data-for="reply-instructions">0 / 1000</span>
-        </div>
-
-        <!-- Conversation history panel -->
-        <div id="reply-conversation-panel" class="hidden mb-lg">
-          <div class="border border-aic-border rounded-sm bg-aic-bg p-sm">
-            <div class="flex items-center justify-between mb-sm">
-              <span class="text-sm font-medium text-aic-text-secondary">Conversation for this email</span>
-              <button
-                id="btn-copy-last-reply"
-                class="aic-btn aic-btn--ghost text-xs p-xs"
-                title="Copy the latest reply"
-                type="button"
-              >
-                Copy last reply
-              </button>
-            </div>
-            <div id="reply-conv-summary" class="hidden mb-sm text-xs text-aic-text-tertiary leading-relaxed"></div>
-            <div id="reply-conv-list" class="flex flex-col gap-xs"></div>
-            <div id="reply-conv-empty" class="hidden text-xs text-aic-text-tertiary"></div>
-            <div class="mt-sm border-t border-aic-border pt-sm">
-              <div class="text-xs font-medium text-aic-text-secondary mb-xs">Latest reply</div>
-              <div id="reply-conv-last" class="aic-preview text-sm"></div>
-            </div>
-          </div>
         </div>
 
         <!-- Tone & options row -->

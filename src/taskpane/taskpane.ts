@@ -81,7 +81,6 @@ import {
   clearConversation,
   clearAllConversations,
   getConversation,
-  getLastAssistantReply,
 } from '../features/conversation-memory';
 
 // ---------------------------------------------------------------------------
@@ -473,11 +472,6 @@ function renderConversationPanel(): void {
   if (summaryEl) {
     summaryEl.textContent = rec.summary || '';
     summaryEl.classList.toggle('hidden', !rec.summary);
-  }
-
-  const lastEl = $('reply-conv-last');
-  if (lastEl) {
-    lastEl.textContent = getLastAssistantReply(key) || '';
   }
 
   const emptyEl = $('reply-conv-empty');
@@ -1343,14 +1337,6 @@ Office.onReady((info) => {
       panel.classList.toggle('hidden', !willShow);
       const btn = $('btn-show-conversation') as HTMLButtonElement | null;
       if (btn) btn.textContent = willShow ? 'Hide conversation' : 'Show conversation';
-    });
-
-    // Copy the latest reply from the viewer
-    $('btn-copy-last-reply')?.addEventListener('click', () => {
-      const last = getLastAssistantReply(getSessionKey());
-      if (last) {
-        void copyToClipboard(last);
-      }
     });
 
     // --- Summarize ---
