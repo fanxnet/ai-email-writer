@@ -179,7 +179,7 @@ export async function generateText(
         timeoutMs,
       );
 
-      const text = response.text;
+      const text = (response as { text?: string }).text;
 
       if (!text || text.trim().length === 0) {
         throw new GeminiError(
@@ -239,7 +239,7 @@ export async function generateJson<T = Record<string, unknown>>(
         timeoutMs,
       );
 
-      const text = response.text;
+      const text = (response as { text?: string }).text;
 
       if (!text || text.trim().length === 0) {
         throw new GeminiError(

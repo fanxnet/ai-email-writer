@@ -7,7 +7,7 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateText, FAST_MODEL } from '../services/ai-service';
+import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { EXTRACT_ACTION_ITEMS_PROMPT } from '../prompts/templates';
 import {
@@ -65,7 +65,6 @@ export async function extractActionItems(): Promise<ActionItem[]> {
   const raw = await generateText(prompt, {
     temperature: 0.2, // Low temperature for factual extraction
     maxOutputTokens: 2048,
-    model: FAST_MODEL,
   });
 
   lastRawResponse = raw;

@@ -10,7 +10,7 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateText, FAST_MODEL } from '../services/ai-service';
+import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { SUMMARIZE_THREAD_PROMPT } from '../prompts/templates';
 import {
@@ -89,7 +89,6 @@ export async function summarizeThread(options: SummarizeOptions): Promise<string
   const summary = await generateText(prompt, {
     temperature: 0.4, // Lower temperature for factual summaries
     maxOutputTokens: getMaxTokensForLength(options.length),
-    model: FAST_MODEL,
   });
 
   lastSummary = summary;

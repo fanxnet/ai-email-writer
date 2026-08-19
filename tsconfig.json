@@ -5,10 +5,13 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "jsx": "react",
+    "module": "commonjs",
+    "moduleResolution": "node",
     "noEmitOnError": true,
     "outDir": "lib",
     "sourceMap": true,
-    "target": "es5",
+    "skipLibCheck": true,
+    "target": "es2019",
     "lib": [
       "es2015",
       "dom"
