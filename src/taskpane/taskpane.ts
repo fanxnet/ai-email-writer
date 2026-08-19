@@ -12,7 +12,7 @@
 import '../styles/main.css';
 import './taskpane.css';
 import { initGeminiClient } from '../services/gemini';
-import { initDeepSeekClient } from '../services/deepseek';
+import { initDeepSeekClient, abortDeepSeekRequest } from '../services/deepseek';
 import { generateText } from '../services/ai-service';
 import { getItemMode } from '../services/outlook';
 import { buildGoalText, getTemplates, saveTemplate, deleteTemplate, getCareers, saveCareer, deleteCareer } from '../features/settings';
@@ -607,6 +607,38 @@ function handleCopyToCompose(): void {
 // ---------------------------------------------------------------------------
 // Reply handlers
 // ---------------------------------------------------------------------------
+
+// Reply operations are serialized: only one generate/regenerate/refine may run
+// at a time, and the action buttons are disabled while one is in flight. This
+// prevents duplicate DeepSeek requests stacking up on repeated clicks.
+let replyRequestInFlight = false;
+
+const REPLY_ACTION_BUTTONS = ['btn-generate-reply', 'btn-regenerate-reply', 'btn-refine-reply'];
+
+function setReplyButtonsDisabled(disabled: boolean): void {
+  for (const id of REPLY_ACTION_BUTTONS) {
+    const btn = $(id) as HTMLButtonElement | null;
+    if (btn) btn.disabled = disabled;
+  }
+}
+
+function withReplyGuard(action: () => Promise<void>): () => Promise<void> {
+  return async () => {
+    if (replyRequestInFlight) return;
+    replyRequestInFlight = true;
+    setReplyButtonsDisabled(true);
+    abortDeepSeekRequest();
+    try {
+      await action();
+    } finally {
+      replyRequestInFlight = false;
+      setReplyButtonsDisabled(false);
+    }
+  };
+}
+
+// Cancel any in-flight DeepSeek request when the taskpane is unloaded
+window.addEventListener('beforeunload', () => abortDeepSeekRequest());
 
 async function handleGenerateReply(): Promise<void> {
   const instructions = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
@@ -1317,15 +1349,15 @@ Office.onReady((info) => {
     });
 
     // --- Reply ---
-    $('btn-generate-reply')?.addEventListener('click', handleGenerateReply);
+    $('btn-generate-reply')?.addEventListener('click', withReplyGuard(handleGenerateReply));
     $('btn-suggest-replies')?.addEventListener('click', handleSuggestReplies);
-    $('btn-regenerate-reply')?.addEventListener('click', handleRegenerateReply);
-    $('btn-refine-reply')?.addEventListener('click', handleRefineReply);
+    $('btn-regenerate-reply')?.addEventListener('click', withReplyGuard(handleRegenerateReply));
+    $('btn-refine-reply')?.addEventListener('click', withReplyGuard(handleRefineReply));
     $('btn-insert-reply')?.addEventListener('click', handleInsertReply);
     $('btn-insert-reply-all')?.addEventListener('click', handleInsertReplyAll);
 
     $('reply-refine-input')?.addEventListener('keydown', (e: Event) => {
-      if ((e as KeyboardEvent).key === 'Enter') handleRefineReply();
+      if ((e as KeyboardEvent).key === 'Enter') withReplyGuard(handleRefineReply)();
     });
 
     // ------------------------------------------------------------------

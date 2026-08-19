@@ -124,12 +124,12 @@ export function loadSettings(): AIComposeSettings {
 
 /**
  * Save settings to localStorage and update the in-memory cache.
- * If the API key changed, automatically re-initializes the Gemini client.
+ * Re-initializes the underlying client for the active provider so that
+ * switching providers takes effect immediately — even when the API key
+ * itself did not change (e.g. selecting DeepSeek with a previously saved
+ * key would otherwise leave its client uninitialized).
  */
 export function saveSettings(settings: AIComposeSettings): void {
-  const previousGeminiKey = cached?.geminiApiKey || "";
-  const previousDeepseekKey = cached?.deepseekApiKey || "";
-
   cached = { ...settings };
 
   try {
@@ -139,13 +139,13 @@ export function saveSettings(settings: AIComposeSettings): void {
   }
 
   // 根据当前配置对应初始化底层模型客户端
-  if (settings.aiProvider === "gemini" && settings.geminiApiKey && settings.geminiApiKey !== previousGeminiKey) {
+  if (settings.aiProvider === "gemini" && settings.geminiApiKey) {
     try {
       initGeminiClient(settings.geminiApiKey);
     } catch {
       // Will be retried on next action
     }
-  } else if (settings.aiProvider === "deepseek" && settings.deepseekApiKey && settings.deepseekApiKey !== previousDeepseekKey) {
+  } else if (settings.aiProvider === "deepseek" && settings.deepseekApiKey) {
     try {
       initDeepSeekClient(settings.deepseekApiKey);
     } catch {

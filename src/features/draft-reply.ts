@@ -153,7 +153,7 @@ export async function generateReply(options: DraftReplyOptions): Promise<string>
 
   const reply = await generateText(prompt, {
     temperature: 0.7,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
   });
 
   lastReplyOptions = { ...options };
@@ -251,7 +251,7 @@ Requirements:
 
   const refined = await generateText(prompt, {
     temperature: 0.6,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
   });
 
   // Record the refinement round so later turns can reference it
