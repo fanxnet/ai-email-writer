@@ -76,6 +76,7 @@ import {
   getSessionKey,
   AutoSaveType,
 } from '../features/auto-save';
+import { clearConversation, clearAllConversations } from '../features/conversation-memory';
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -1307,6 +1308,16 @@ Office.onReady((info) => {
       if ((e as KeyboardEvent).key === 'Enter') handleRefineReply();
     });
 
+    // Clear per-email conversation memory
+    $('btn-clear-conversation')?.addEventListener('click', () => {
+      clearConversation(getSessionKey());
+      const msg = $('reply-conv-cleared-msg');
+      if (msg) {
+        msg.classList.remove('hidden');
+        setTimeout(() => { msg.classList.add('hidden'); }, 2000);
+      }
+    });
+
     // --- Summarize ---
     $('btn-summarize')?.addEventListener('click', handleSummarize);
     $('btn-regenerate-summary')?.addEventListener('click', handleRegenerateSummary);
@@ -1525,10 +1536,20 @@ Office.onReady((info) => {
     // Clear All Data button
     $('btn-clear-all-data')?.addEventListener('click', () => {
       resetSettings();
+      clearAllConversations();
+      try {
+        localStorage.removeItem('aic_templates');
+        localStorage.removeItem('aic_careers');
+        localStorage.removeItem('aic_auto_sessions');
+      } catch {
+        // Best-effort — storage may be unavailable
+      }
 
       // Reset all form fields to defaults
       const defaults = loadSettings();
       applySettingsToForms(defaults);
+      refreshTemplateDropdowns();
+      refreshCareerDropdown();
 
       // Show confirmation
       const msg = $('clear-data-msg');

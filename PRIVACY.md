@@ -30,6 +30,11 @@ AI Compose stores the following in your browser's `localStorage`:
 - **Preferences** — Default tone, summary style, translation language, and selected model
 - **Career profiles** — Saved career descriptions (profiles you create in Settings); the active
   profile is used as context when drafting emails/replies
+- **Conversation memory** — Per-email Q&A history and summaries for the Reply feature, kept in
+  `localStorage`. Records not used for 72 hours are automatically deleted, and the store is
+  capped by record count and total size. <br>
+  Use **Clear conversation** in the Reply tab to erase a single email's history, or
+  **Clear All Data** to wipe everything.
 
 This data **never leaves your device** unless you explicitly use a feature that calls the API.
 

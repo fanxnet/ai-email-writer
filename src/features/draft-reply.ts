@@ -23,6 +23,15 @@ import {
   getItemMode,
   EmailContact,
 } from '../services/outlook';
+import { getSessionKey } from './auto-save';
+import {
+  appendTurn,
+  buildReplyContext,
+  buildReplyContextText,
+  buildEmailRef,
+  getEmailContextBlock,
+  compactIfNeeded,
+} from './conversation-memory';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,8 +108,9 @@ export async function generateReply(options: DraftReplyOptions): Promise<string>
   }
 
   const context = await getEmailContext();
+  const sessionKey = getSessionKey();
 
-  // Build the original email string for the prompt (truncated for safety)
+  // Build the original email string for the prompt (pre-truncated for safety)
   let originalEmail = `From: ${context.sender.name} <${context.sender.email}>\n`;
   originalEmail += `Subject: ${context.subject}\n\n`;
   originalEmail += context.body;
@@ -111,9 +121,19 @@ export async function generateReply(options: DraftReplyOptions): Promise<string>
     ? 'Reply in the same language as the original email'
     : options.language;
 
+  // Long emails are summarized once and cached per email ref
+  const { text: emailBlock } = await getEmailContextBlock(
+    sessionKey,
+    buildEmailRef(context.subject, context.body),
+    originalEmail,
+  );
+
+  // Inject bounded conversation memory (summary + recent turns)
+  const memoryText = buildReplyContextText(buildReplyContext(sessionKey));
+
   const prompt = buildPrompt(REPLY_PROMPT, {
-    ORIGINAL_EMAIL: originalEmail,
-    REPLY_INSTRUCTIONS: options.instructions,
+    ORIGINAL_EMAIL: emailBlock,
+    REPLY_INSTRUCTIONS: `${memoryText}Current request: ${options.instructions}`,
     TONE: options.tone || 'professional',
     LANGUAGE: language,
     REPLY_TO_NAME: context.sender.name || context.sender.email || 'the sender',
@@ -126,6 +146,11 @@ export async function generateReply(options: DraftReplyOptions): Promise<string>
 
   lastReplyOptions = { ...options };
   lastReply = reply;
+
+  // Record the exchange; compact older turns (best-effort, never blocks)
+  appendTurn(sessionKey, 'user', options.instructions);
+  appendTurn(sessionKey, 'assistant', reply);
+  void compactIfNeeded(sessionKey);
 
   return reply;
 }
@@ -171,6 +196,12 @@ Requirements:
     temperature: 0.6,
     maxOutputTokens: 2048,
   });
+
+  // Record the refinement round so later turns can reference it
+  const sessionKey = getSessionKey();
+  appendTurn(sessionKey, 'user', refinement);
+  appendTurn(sessionKey, 'assistant', refined);
+  void compactIfNeeded(sessionKey);
 
   lastReply = refined;
   return refined;

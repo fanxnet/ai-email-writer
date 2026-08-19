@@ -547,7 +547,18 @@
         </div>
 
         <div class="mb-lg">
-          <label class="block text-sm font-medium text-aic-text-secondary mb-xs" for="reply-instructions">Reply instructions</label>
+          <div class="flex items-center justify-between mb-xs">
+            <label class="block text-sm font-medium text-aic-text-secondary" for="reply-instructions">Reply instructions</label>
+            <button
+              id="btn-clear-conversation"
+              class="aic-btn aic-btn--ghost text-xs p-xs"
+              title="Clear the conversation memory for this email"
+              type="button"
+            >
+              Clear conversation
+            </button>
+          </div>
+          <span id="reply-conv-cleared-msg" class="hidden mb-xs block text-xs text-aic-success">✓ Conversation memory cleared</span>
           <div class="flex items-center gap-xs mb-xs">
             <select id="reply-template" class="aic-select aic-template-select flex-1" title="Load a saved template">
               <option value="" selected>Templates...</option>
