@@ -108,6 +108,14 @@ function hideElement(id: string): void {
   if (el) el.classList.add('hidden');
 }
 
+/**
+ * Display name of the currently selected AI provider for user-facing
+ * loading messages ("Generating with Gemini..." vs "...with DeepSeek...").
+ */
+function providerDisplayName(): string {
+  return getSetting('aiProvider') === 'deepseek' ? 'DeepSeek' : 'Gemini';
+}
+
 function showLoading(message?: string, inputLength?: number): void {
   const overlay = $('loading-overlay');
   if (!overlay) return;
@@ -476,7 +484,7 @@ function restoreReplyFromHistory(): void {
   }
 }
 
-/** Render the per-email conversation into the "Show conversation" panel. */
+/** Render the per-email conversation into the "Show" panel. */
 function renderConversationPanel(): void {
   const key = getSessionKey();
   const rec = getConversation(key);
@@ -538,7 +546,7 @@ async function handleGenerate(): Promise<void> {
   };
 
   hideError();
-  showLoading('Generating with Gemini...', instructions.length);
+  showLoading(`Generating with ${providerDisplayName()}...`, instructions.length);
 
   try {
     const draft = await generateDraft(options);
@@ -625,7 +633,7 @@ async function handleGenerateReply(): Promise<void> {
   };
 
   hideError();
-  showLoading('Generating reply with Gemini...', instructions.length);
+  showLoading(`Generating reply with ${providerDisplayName()}...`, instructions.length);
 
   try {
     const reply = await generateReply(options);
@@ -808,7 +816,7 @@ async function handleSummarize(): Promise<void> {
   const options: SummarizeOptions = { style, length };
 
   hideError();
-  showLoading('Summarizing with Gemini...');
+  showLoading(`Summarizing with ${providerDisplayName()}...`);
 
   try {
     const summary = await summarizeThread(options);
@@ -878,7 +886,7 @@ async function handleImprove(): Promise<void> {
   const options: ImproveOptions = { focus };
 
   hideError();
-  showLoading('Improving with Gemini...');
+  showLoading(`Improving with ${providerDisplayName()}...`);
 
   try {
     const result = await improveWriting(options);
@@ -1354,14 +1362,14 @@ Office.onReady((info) => {
       renderConversationPanel();
       const panel = conversationPanel();
       if (panel) panel.classList.remove('hidden');
-      setConversationLabel('Hide conversation');
+      setConversationLabel('Hide');
       closeConversationDropdown();
     };
 
     const closeConversationPanel = (): void => {
       const panel = conversationPanel();
       if (panel) panel.classList.add('hidden');
-      setConversationLabel('Show conversation');
+      setConversationLabel('Show');
       closeConversationDropdown();
     };
 

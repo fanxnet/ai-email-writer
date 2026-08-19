@@ -13,7 +13,7 @@
 
 /* global Office */
 
-import { generateText } from '../services/gemini';
+import { generateText } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { IMPROVE_WRITING_PROMPT } from '../prompts/templates';
 
@@ -39,8 +39,9 @@ const FOCUS_LABELS: Record<ImprovementFocus, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Read the selected text in compose mode, send it to Gemini with the given
- * improvement focus, and replace the selection with the improved version.
+ * Read the selected text in compose mode, send it to the configured AI
+ * provider with the given improvement focus, and replace the selection with
+ * the improved version.
  */
 async function improveSelectedText(
   focus: ImprovementFocus,
@@ -62,7 +63,7 @@ async function improveSelectedText(
       return;
     }
 
-    // 2. Build the prompt and call Gemini
+    // 2. Build the prompt and call the selected AI provider
     const focusLabel = FOCUS_LABELS[focus];
     const prompt = buildPrompt(IMPROVE_WRITING_PROMPT, {
       TEXT: selectedText,
