@@ -547,35 +547,50 @@
         </div>
 
         <div class="mb-lg">
-          <!-- Conversation history panel (sits above the Show conversation button) -->
+          <!-- Conversation toolbar: context toggle + Show/Hide/Clear dropdown -->
+          <div class="flex items-center justify-between mb-xs">
+            <label class="aic-checkbox">
+              <input id="conversation-context-toggle" type="checkbox" checked />
+              <span>Conversation context</span>
+            </label>
+            <div id="conversation-control" class="aic-split relative flex items-center gap-[2px]">
+              <button
+                id="btn-conversation-toggle"
+                class="aic-btn aic-btn--ghost text-xs p-xs"
+                title="Show or hide the conversation history for this email"
+                type="button"
+              >
+                Show conversation
+              </button>
+              <button
+                id="btn-conversation-caret"
+                class="aic-btn aic-btn--ghost text-xs p-xs"
+                title="Conversation menu"
+                type="button"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div id="conversation-dropdown" class="aic-dropdown hidden">
+                <button class="aic-dropdown__item" type="button" data-action="show">Show conversation</button>
+                <button class="aic-dropdown__item" type="button" data-action="hide">Hide conversation</button>
+                <button class="aic-dropdown__item" type="button" data-action="clear">Clear conversation</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Conversation history panel (directly below the toolbar) -->
           <div id="reply-conversation-panel" class="hidden mb-xs">
             <div class="border border-aic-border rounded-sm bg-aic-bg p-sm">
               <div class="flex items-center justify-between mb-sm">
                 <span class="text-sm font-medium text-aic-text-secondary">Conversation</span>
-                <button
-                  id="btn-clear-conversation"
-                  class="aic-btn aic-btn--ghost text-xs p-xs"
-                  title="Clear the conversation memory for this email"
-                  type="button"
-                >
-                  Clear conversation
-                </button>
               </div>
               <div id="reply-conv-summary" class="hidden mb-sm text-xs text-aic-text-tertiary leading-relaxed"></div>
               <div id="reply-conv-list" class="flex flex-col gap-xs"></div>
               <div id="reply-conv-empty" class="hidden text-xs text-aic-text-tertiary"></div>
             </div>
           </div>
-          <div class="flex items-center justify-between mb-xs">
+          <div>
             <label class="block text-sm font-medium text-aic-text-secondary" for="reply-instructions">Reply instructions</label>
-            <button
-              id="btn-show-conversation"
-              class="aic-btn aic-btn--ghost text-xs p-xs"
-              title="Show or hide the conversation history saved for this email"
-              type="button"
-            >
-              Show conversation
-            </button>
           </div>
           <span id="reply-conv-cleared-msg" class="hidden mb-xs block text-xs text-aic-success">✓ Conversation memory cleared</span>
           <span id="reply-conv-restore-msg" class="hidden mb-xs block text-xs text-aic-text-tertiary"></span>

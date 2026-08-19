@@ -44,6 +44,8 @@ export interface AIComposeSettings {
   customRules: string;
   /** ID of the active career profile (see getCareers / saveCareer). Empty = none. */
   activeCareerId: string;
+  /** Whether the Reply feature keeps per-email conversation context. */
+  conversationContextEnabled: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   },
   customRules: "",
   activeCareerId: "",
+  conversationContextEnabled: true,
 };
 
 // ---------------------------------------------------------------------------

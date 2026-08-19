@@ -69,6 +69,7 @@ import {
   loadSettings,
   saveSettings,
   resetSettings,
+  getSetting,
   AIComposeSettings,
 } from '../features/settings';
 import {
@@ -425,11 +426,25 @@ async function loadReplyContext(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Show or hide the conversation controls and panel based on the
+ * "Conversation context" toggle. The checkbox itself stays visible so the
+ * feature can always be re-enabled.
+ */
+function applyConversationFeatureVisibility(): void {
+  const enabled = getSetting('conversationContextEnabled');
+  const control = $('conversation-control');
+  if (control) control.classList.toggle('hidden', !enabled);
+  const panel = $('reply-conversation-panel');
+  if (panel && !enabled) panel.classList.add('hidden');
+}
+
+/**
  * Restore the most recent generated reply for the current email so all
  * result actions (Insert / Regenerate / Refine) work again after the user
  * leaves the email and returns.
  */
 function restoreReplyFromHistory(): void {
+  if (!getSetting('conversationContextEnabled')) return;
   try {
     const key = getSessionKey();
     const restored = restoreFromHistory(key);
@@ -1167,6 +1182,11 @@ Office.onReady((info) => {
       }
       const customRulesEl = $('custom-rules') as HTMLTextAreaElement | null;
       if (customRulesEl) customRulesEl.value = s.customRules;
+
+      // Conversation context toggle (Reply toolbar)
+      const ctxToggle = $('conversation-context-toggle') as HTMLInputElement | null;
+      if (ctxToggle) ctxToggle.checked = s.conversationContextEnabled;
+      applyConversationFeatureVisibility();
     };
 
     applySettingsToForms(settings);
@@ -1313,11 +1333,42 @@ Office.onReady((info) => {
       if ((e as KeyboardEvent).key === 'Enter') handleRefineReply();
     });
 
-    // Clear per-email conversation memory
-    $('btn-clear-conversation')?.addEventListener('click', () => {
+    // ------------------------------------------------------------------
+    // Show / Hide / Clear conversation composite dropdown
+    // ------------------------------------------------------------------
+    const conversationPanel = () => $('reply-conversation-panel');
+    const conversationDropdown = () => $('conversation-dropdown');
+    const conversationToggleBtn = () => $('btn-conversation-toggle') as HTMLButtonElement | null;
+
+    const setConversationLabel = (label: string): void => {
+      const btn = conversationToggleBtn();
+      if (btn) btn.textContent = label;
+    };
+
+    const closeConversationDropdown = (): void => {
+      const dd = conversationDropdown();
+      if (dd) dd.classList.add('hidden');
+    };
+
+    const openConversationPanel = (): void => {
+      renderConversationPanel();
+      const panel = conversationPanel();
+      if (panel) panel.classList.remove('hidden');
+      setConversationLabel('Hide conversation');
+      closeConversationDropdown();
+    };
+
+    const closeConversationPanel = (): void => {
+      const panel = conversationPanel();
+      if (panel) panel.classList.add('hidden');
+      setConversationLabel('Show conversation');
+      closeConversationDropdown();
+    };
+
+    const clearConversationAndRefresh = (): void => {
       clearConversation(getSessionKey());
       hideElement('reply-result-section');
-      const panel = $('reply-conversation-panel');
+      const panel = conversationPanel();
       if (panel && !panel.classList.contains('hidden')) {
         renderConversationPanel();
       }
@@ -1326,17 +1377,52 @@ Office.onReady((info) => {
         msg.classList.remove('hidden');
         setTimeout(() => { msg.classList.add('hidden'); }, 2000);
       }
+      closeConversationDropdown();
+    };
+
+    // Primary button toggles between Show and Hide on consecutive clicks
+    $('btn-conversation-toggle')?.addEventListener('click', () => {
+      const panel = conversationPanel();
+      if (!panel) return;
+      if (panel.classList.contains('hidden')) {
+        openConversationPanel();
+      } else {
+        closeConversationPanel();
+      }
     });
 
-    // Toggle the saved-conversation viewer
-    $('btn-show-conversation')?.addEventListener('click', () => {
-      const panel = $('reply-conversation-panel');
-      if (!panel) return;
-      const willShow = panel.classList.contains('hidden');
-      if (willShow) renderConversationPanel();
-      panel.classList.toggle('hidden', !willShow);
-      const btn = $('btn-show-conversation') as HTMLButtonElement | null;
-      if (btn) btn.textContent = willShow ? 'Hide conversation' : 'Show conversation';
+    // Caret opens/closes the menu (Clear is only reachable from here)
+    $('btn-conversation-caret')?.addEventListener('click', (e: Event) => {
+      e.stopPropagation();
+      const dd = conversationDropdown();
+      if (!dd) return;
+      const willShow = dd.classList.contains('hidden');
+      dd.classList.toggle('hidden', !willShow);
+    });
+
+    // Menu items
+    document
+      .querySelectorAll('#conversation-dropdown .aic-dropdown__item')
+      .forEach((item) => {
+        item.addEventListener('click', () => {
+          const action = (item as HTMLElement).dataset.action;
+          if (action === 'show') openConversationPanel();
+          else if (action === 'hide') closeConversationPanel();
+          else if (action === 'clear') clearConversationAndRefresh();
+          else closeConversationDropdown();
+        });
+      });
+
+    // Close the conversation menu when clicking anywhere else
+    document.addEventListener('click', () => closeConversationDropdown());
+
+    // "Conversation context" toggle — applies immediately
+    $('conversation-context-toggle')?.addEventListener('change', (e: Event) => {
+      const enabled = (e.target as HTMLInputElement).checked;
+      const settings = loadSettings();
+      settings.conversationContextEnabled = enabled;
+      saveSettings(settings);
+      applyConversationFeatureVisibility();
     });
 
     // --- Summarize ---
