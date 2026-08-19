@@ -77,13 +77,13 @@ const BUDGET_CHARS = 1_000_000;
 const WINDOW_TURNS = 2;
 
 /** When a record holds more entries than this, older ones become a summary. */
-const COMPACT_AFTER = 4;
+const COMPACT_AFTER = 16;
 
 const SUMMARY_MAX_TOKENS = 300;
 const EMAIL_SUMMARY_MAX_TOKENS = 400;
 
 /** Emails longer than this (chars, after pre-truncation) get an AI summary. */
-const LONG_EMAIL_CHARS = 6000;
+const LONG_EMAIL_CHARS = 8000;
 
 const MAX_ENTRIES = 20;
 const STORE_USER_MAX_CHARS = 200;
@@ -386,7 +386,7 @@ export async function compactIfNeeded(key: string): Promise<void> {
 
   const older = record.entries.slice(0, record.entries.length - WINDOW_TURNS * 2);
   // Frequency control: only fold when enough new older turns have
-  // accumulated since the last compaction (≈ every 4 exchanges), so a
+  // accumulated since the last compaction (≈ every 10 interactions), so a
   // single generation does not trigger a compaction round every time.
   if (older.length < COMPACT_AFTER) return;
 
