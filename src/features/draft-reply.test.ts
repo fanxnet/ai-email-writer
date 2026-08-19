@@ -8,8 +8,8 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateReply, refineReply } from './draft-reply';
-import { getConversation } from './conversation-memory';
+import { generateReply, refineReply, restoreFromHistory } from './draft-reply';
+import { getConversation, appendTurn, rememberLastRequest } from './conversation-memory';
 
 jest.mock('../services/ai-service', () => ({ generateText: jest.fn() }));
 jest.mock('../services/outlook', () => ({
@@ -147,5 +147,54 @@ describe('refineReply conversation memory', () => {
     expect(rec.entries).toHaveLength(4);
     expect(rec.entries[2]).toMatchObject({ role: 'user', content: 'Make the closing shorter' });
     expect(rec.entries[3]).toMatchObject({ role: 'assistant', content: 'Refined reply body' });
+  });
+});
+
+describe('restoreFromHistory', () => {
+  const options = () => ({
+    instructions: 'Draft a reply',
+    tone: 'professional',
+    includeOriginal: true,
+    language: 'auto',
+  });
+
+  it('restores the latest reply and the request that produced it', async () => {
+    mockGenerateText.mockResolvedValueOnce('Reply copy one');
+    await generateReply(options());
+
+    const restored = restoreFromHistory(SESSION_KEY);
+    expect(restored).not.toBeNull();
+    expect(restored!.reply).toBe('Reply copy one');
+    expect(restored!.options.instructions).toBe('Draft a reply');
+    expect(restored!.options.tone).toBe('professional');
+  });
+
+  it('restores a stored record as if returning to the email after a reload', () => {
+    appendTurn(SESSION_KEY, 'user', 'Saved question');
+    appendTurn(SESSION_KEY, 'assistant', 'Saved answer');
+    rememberLastRequest(SESSION_KEY, {
+      instructions: 'Saved question',
+      tone: 'formal',
+      includeOriginal: true,
+    });
+
+    const restored = restoreFromHistory(SESSION_KEY);
+    expect(restored?.reply).toBe('Saved answer');
+    expect(restored?.options.tone).toBe('formal');
+  });
+
+  it('returns null when there is no history to restore', () => {
+    expect(restoreFromHistory('conv:empty')).toBeNull();
+  });
+
+  it('falls back to the last user turn when no lastRequest was recorded', () => {
+    appendTurn(SESSION_KEY, 'user', 'Legacy question');
+    appendTurn(SESSION_KEY, 'assistant', 'Legacy answer');
+
+    const restored = restoreFromHistory(SESSION_KEY);
+    expect(restored?.reply).toBe('Legacy answer');
+    expect(restored?.options.instructions).toBe('Legacy question');
+    expect(restored?.options.tone).toBe('professional');
+    expect(restored?.options.language).toBe('auto');
   });
 });

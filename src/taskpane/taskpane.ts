@@ -11,9 +11,9 @@
 
 import '../styles/main.css';
 import './taskpane.css';
-import { initGeminiClient, Type } from '../services/gemini';
+import { initGeminiClient } from '../services/gemini';
 import { initDeepSeekClient } from '../services/deepseek';
-import { generateText, generateJson } from '../services/ai-service';
+import { generateText } from '../services/ai-service';
 import { getItemMode } from '../services/outlook';
 import { buildGoalText, getTemplates, saveTemplate, deleteTemplate, getCareers, saveCareer, deleteCareer } from '../features/settings';
 import {
@@ -31,6 +31,7 @@ import {
   openReplyAll,
   loadEmailContext,
   clearEmailContext,
+  restoreFromHistory,
   DraftReplyOptions,
 } from '../features/draft-reply';
 import {
@@ -76,7 +77,12 @@ import {
   getSessionKey,
   AutoSaveType,
 } from '../features/auto-save';
-import { clearConversation, clearAllConversations } from '../features/conversation-memory';
+import {
+  clearConversation,
+  clearAllConversations,
+  getConversation,
+  getLastAssistantReply,
+} from '../features/conversation-memory';
 
 // ---------------------------------------------------------------------------
 // DOM helpers
@@ -197,93 +203,6 @@ function updatePreviewStats(previewId: string): void {
 // ---------------------------------------------------------------------------
 // Email Scoring
 // ---------------------------------------------------------------------------
-
-interface EmailScores {
-  clarity: number;
-  tone: number;
-  conciseness: number;
-  cta: number;
-}
-
-async function scoreEmail(text: string, scoreCardId: string): Promise<void> {
-  const card = $(scoreCardId);
-  if (!card) return;
-
-  // Show card with loading state
-  card.classList.remove('hidden');
-  const valueEl = card.querySelector('.aic-score-card__value') as HTMLElement;
-  if (valueEl) valueEl.textContent = '...';
-
-  // Small delay to avoid rate-limiting with the generation call
-  await new Promise((r) => setTimeout(r, 500));
-
-  try {
-    console.log('[Score] Requesting score...');
-    const provider = loadSettings().aiProvider;
-    const scoreModel = provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-2.5-flash';
-
-    const parsed = await generateJson<EmailScores>(
-      `Score this email:\n\n${text.slice(0, 1500)}`,
-      {
-        model: scoreModel,
-        systemInstruction: 'You are an email quality scorer. Score emails on clarity, tone, conciseness, and call-to-action, each from 1 to 10.',
-        temperature: 0.1,
-        maxOutputTokens: 100,
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            clarity: { type: Type.NUMBER },
-            tone: { type: Type.NUMBER },
-            conciseness: { type: Type.NUMBER },
-            cta: { type: Type.NUMBER },
-          },
-          required: ['clarity', 'tone', 'conciseness', 'cta'],
-        },
-      },
-    );
-
-    console.log('[Score] Parsed:', parsed);
-
-    const clamp = (v: number): number => Math.min(10, Math.max(1, Math.round(v)));
-    const scores = {
-      clarity: clamp(Number(parsed.clarity) || 7),
-      tone: clamp(Number(parsed.tone) || 7),
-      conciseness: clamp(Number(parsed.conciseness) || 7),
-      cta: clamp(Number(parsed.cta) || 7),
-    };
-
-    const overall = Math.round(
-      (scores.clarity + scores.tone + scores.conciseness + scores.cta) / 4
-    );
-
-    // Color based on score
-    const scoreColor = (s: number): string =>
-      s >= 7 ? '#22c55e' : s >= 5 ? '#eab308' : '#ef4444';
-
-    // Update circle
-    const color = scoreColor(overall);
-    card.style.setProperty('--aic-score-color', color);
-    if (valueEl) valueEl.textContent = `${overall}`;
-
-    // Update bars
-    const dims: Record<string, number> = scores;
-    card.querySelectorAll('.aic-score-bar').forEach((bar) => {
-      const dim = (bar as HTMLElement).dataset.dim || '';
-      const val = dims[dim];
-      if (val === undefined) return;
-      const fill = bar.querySelector('.aic-score-bar__fill') as HTMLElement;
-      const valEl = bar.querySelector('.aic-score-bar__val') as HTMLElement;
-      if (fill) {
-        fill.style.width = `${val * 10}%`;
-        fill.style.background = scoreColor(val);
-      }
-      if (valEl) valEl.textContent = `${val}`;
-    });
-  } catch (err) {
-    console.warn('[Score] Failed:', err);
-    if (valueEl) valueEl.textContent = '—';
-  }
-}
 
 function updateModelDropdown(provider: string, currentModel?: string): void {
   const modelSelect = $('settings-model') as HTMLSelectElement | null;
@@ -438,6 +357,7 @@ function switchTab(tabName: string): void {
   // Auto-load email context when switching to Reply tab
   if (tabName === 'reply') {
     loadReplyContext();
+    restoreReplyFromHistory();
   }
 }
 
@@ -502,6 +422,95 @@ async function loadReplyContext(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Conversation memory (reply reuse)
+// ---------------------------------------------------------------------------
+
+/**
+ * Restore the most recent generated reply for the current email so all
+ * result actions (Insert / Regenerate / Refine) work again after the user
+ * leaves the email and returns.
+ */
+function restoreReplyFromHistory(): void {
+  try {
+    const key = getSessionKey();
+    const restored = restoreFromHistory(key);
+    const rec = getConversation(key);
+    const avgTurns = rec.entries.length;
+
+    if (!restored) {
+      hideElement('reply-result-section');
+      hideElement('reply-conv-restore-msg');
+      return;
+    }
+
+    setPreview('reply-preview', restored.reply);
+    showElement('reply-result-section');
+
+    const msg = $('reply-conv-restore-msg');
+    if (msg) {
+      const exchanges = Math.max(1, Math.ceil(avgTurns / 2));
+      msg.textContent = `↩ Restored this email's earlier conversation${exchanges > 1 ? ` (${exchanges} exchanges)` : ''} — includes the latest reply.`;
+      msg.classList.remove('hidden');
+    }
+
+    // In compose mode, Reply All is redundant — user already chose reply type
+    if (getItemMode() === 'compose') {
+      hideElement('btn-insert-reply-all');
+    }
+  } catch {
+    // Best-effort restore — never block the panel on history issues
+  }
+}
+
+/** Render the per-email conversation into the "Show conversation" panel. */
+function renderConversationPanel(): void {
+  const key = getSessionKey();
+  const rec = getConversation(key);
+  const list = $('reply-conv-list');
+  if (!list) return;
+
+  const summaryEl = $('reply-conv-summary');
+  if (summaryEl) {
+    summaryEl.textContent = rec.summary || '';
+    summaryEl.classList.toggle('hidden', !rec.summary);
+  }
+
+  const lastEl = $('reply-conv-last');
+  if (lastEl) {
+    lastEl.textContent = getLastAssistantReply(key) || '';
+  }
+
+  const emptyEl = $('reply-conv-empty');
+  list.innerHTML = '';
+  if (rec.entries.length === 0) {
+    if (emptyEl) {
+      emptyEl.textContent = 'No conversation saved for this email yet.';
+      emptyEl.classList.remove('hidden');
+    }
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('hidden');
+
+  for (const turn of rec.entries) {
+    const isUser = turn.role === 'user';
+    const row = document.createElement('div');
+    row.className = 'flex flex-col gap-[2px]';
+
+    const label = document.createElement('div');
+    label.className = 'text-xs font-medium ' + (isUser ? 'text-aic-text-secondary' : 'text-aic-blue');
+    label.textContent = isUser ? 'You' : 'Assistant';
+
+    const body = document.createElement('div');
+    body.className = 'text-sm text-aic-text whitespace-pre-wrap';
+    body.textContent = turn.content;
+
+    row.appendChild(label);
+    row.appendChild(body);
+    list.appendChild(row);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Draft Email handlers
 // ---------------------------------------------------------------------------
 
@@ -525,7 +534,6 @@ async function handleGenerate(): Promise<void> {
   try {
     const draft = await generateDraft(options);
     setPreview('draft-preview', draft);
-    void scoreEmail(draft, 'draft-score');
     showElement('result-section');
     $('result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
@@ -542,7 +550,6 @@ async function handleRegenerate(): Promise<void> {
   try {
     const draft = await regenerateDraft();
     setPreview('draft-preview', draft);
-    void scoreEmail(draft, 'draft-score');
   } catch (err: any) {
     showError(err.message || 'Failed to regenerate. Please try again.');
   } finally {
@@ -565,7 +572,6 @@ async function handleRefine(): Promise<void> {
   try {
     const draft = await refineDraft(refinement);
     setPreview('draft-preview', draft);
-    void scoreEmail(draft, 'draft-score');
     if (input) input.value = '';
   } catch (err: any) {
     showError(err.message || 'Failed to refine. Please try again.');
@@ -615,8 +621,9 @@ async function handleGenerateReply(): Promise<void> {
   try {
     const reply = await generateReply(options);
     setPreview('reply-preview', reply);
-    void scoreEmail(reply, 'reply-score');
     showElement('reply-result-section');
+    hideElement('reply-conv-restore-msg');
+    renderConversationPanel();
     $('reply-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     // In compose mode, Reply All is redundant — user already chose reply type
@@ -637,7 +644,8 @@ async function handleRegenerateReply(): Promise<void> {
   try {
     const reply = await regenerateReply();
     setPreview('reply-preview', reply);
-    void scoreEmail(reply, 'reply-score');
+    hideElement('reply-conv-restore-msg');
+    renderConversationPanel();
   } catch (err: any) {
     showError(err.message || 'Failed to regenerate reply. Please try again.');
   } finally {
@@ -660,7 +668,8 @@ async function handleRefineReply(): Promise<void> {
   try {
     const reply = await refineReply(refinement);
     setPreview('reply-preview', reply);
-    void scoreEmail(reply, 'reply-score');
+    hideElement('reply-conv-restore-msg');
+    renderConversationPanel();
     if (input) input.value = '';
   } catch (err: any) {
     showError(err.message || 'Failed to refine reply. Please try again.');
@@ -1098,6 +1107,7 @@ Office.onReady((info) => {
           autoSaveSession();
           loadReplyContext();
           restoreActiveInstructions();
+          restoreReplyFromHistory();
         },
       );
     }
@@ -1169,6 +1179,7 @@ Office.onReady((info) => {
 
     // Restore auto-saved instructions for the current conversation
     restoreActiveInstructions();
+    restoreReplyFromHistory();
 
     // Persist instructions when the sidebar is closed / the add-in is unloaded
     window.addEventListener('pagehide', autoSaveSession);
@@ -1311,10 +1322,34 @@ Office.onReady((info) => {
     // Clear per-email conversation memory
     $('btn-clear-conversation')?.addEventListener('click', () => {
       clearConversation(getSessionKey());
+      hideElement('reply-result-section');
+      const panel = $('reply-conversation-panel');
+      if (panel && !panel.classList.contains('hidden')) {
+        renderConversationPanel();
+      }
       const msg = $('reply-conv-cleared-msg');
       if (msg) {
         msg.classList.remove('hidden');
         setTimeout(() => { msg.classList.add('hidden'); }, 2000);
+      }
+    });
+
+    // Toggle the saved-conversation viewer
+    $('btn-show-conversation')?.addEventListener('click', () => {
+      const panel = $('reply-conversation-panel');
+      if (!panel) return;
+      const willShow = panel.classList.contains('hidden');
+      if (willShow) renderConversationPanel();
+      panel.classList.toggle('hidden', !willShow);
+      const btn = $('btn-show-conversation') as HTMLButtonElement | null;
+      if (btn) btn.textContent = willShow ? 'Hide conversation' : 'Show conversation';
+    });
+
+    // Copy the latest reply from the viewer
+    $('btn-copy-last-reply')?.addEventListener('click', () => {
+      const last = getLastAssistantReply(getSessionKey());
+      if (last) {
+        void copyToClipboard(last);
       }
     });
 

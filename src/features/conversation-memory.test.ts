@@ -17,6 +17,8 @@ import {
   buildEmailRef,
   getEmailContextBlock,
   compactIfNeeded,
+  rememberLastRequest,
+  getLastAssistantReply,
   ConversationTurn,
 } from './conversation-memory';
 
@@ -166,9 +168,10 @@ describe('buildReplyContext', () => {
 // ---------------------------------------------------------------------------
 
 describe('compactIfNeeded', () => {
-  it('folds older turns into a summary and keeps the recent window', async () => {
+  it('folds older turns into a summary only once enough old turns accumulate', async () => {
     mockGenerateText.mockResolvedValue('compacted summary');
-    for (let i = 1; i <= 3; i++) {
+    // 4 Q&A pairs (8 entries) → 4 older turns fold into the summary
+    for (let i = 1; i <= 4; i++) {
       appendTurn('k6', 'user', `question ${i}`);
       appendTurn('k6', 'assistant', `reply ${i}`);
     }
@@ -178,7 +181,19 @@ describe('compactIfNeeded', () => {
     const rec = getConversation('k6');
     expect(rec.entries).toHaveLength(4); // last 2 turn pairs
     expect(rec.summary).toBe('compacted summary');
-    expect(rec.entries[3].content).toBe('reply 3');
+    expect(rec.entries[3].content).toBe('reply 4');
+  });
+
+  it('does not compact until the accumulated older turns reach the threshold', async () => {
+    mockGenerateText.mockResolvedValue('compacted summary');
+    // 3 Q&A pairs (6 entries) → only 2 older turns → compaction must wait
+    for (let i = 1; i <= 3; i++) {
+      appendTurn('k7', 'user', `q${i}`);
+      appendTurn('k7', 'assistant', `r${i}`);
+    }
+    await compactIfNeeded('k7');
+    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(getConversation('k7').entries).toHaveLength(6);
   });
 
   it('does not compact conversations at or below the threshold', async () => {
@@ -192,14 +207,65 @@ describe('compactIfNeeded', () => {
 
   it('degrades silently when the summarizer fails', async () => {
     mockGenerateText.mockRejectedValue(new Error('boom'));
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 4; i++) {
       appendTurn('k8', 'user', `q${i}`);
       appendTurn('k8', 'assistant', `r${i}`);
     }
     await compactIfNeeded('k8');
     const rec = getConversation('k8');
-    expect(rec.entries).toHaveLength(6); // unchanged
+    expect(rec.entries).toHaveLength(8); // unchanged
     expect(rec.summary).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rememberLastRequest / getLastAssistantReply
+// ---------------------------------------------------------------------------
+
+describe('rememberLastRequest / getLastAssistantReply', () => {
+  it('persists the last request on the conversation record', () => {
+    appendTurn('k-lr', 'user', 'Draft a reply');
+    appendTurn('k-lr', 'assistant', 'Reply copy');
+    rememberLastRequest('k-lr', {
+      instructions: 'Draft a reply',
+      tone: 'professional',
+      includeOriginal: true,
+      language: 'auto',
+    });
+
+    const rec = getConversation('k-lr');
+    expect(rec.lastRequest).toEqual({
+      instructions: 'Draft a reply',
+      tone: 'professional',
+      includeOriginal: true,
+      language: 'auto',
+    });
+  });
+
+  it('does not persist lastRequest for the reserved default key', () => {
+    rememberLastRequest('default', {
+      instructions: 'q',
+      tone: 'professional',
+      includeOriginal: true,
+    });
+    expect(readStore()['default']).toBeUndefined();
+  });
+
+  it('clearConversation removes the lastRequest along with the record', () => {
+    appendTurn('k-clear', 'user', 'q');
+    rememberLastRequest('k-clear', { instructions: 'q', tone: 'friendly', includeOriginal: false });
+    clearConversation('k-clear');
+    expect(readStore()['k-clear']).toBeUndefined();
+  });
+
+  it('returns the most recent assistant turn, or null when none exists', () => {
+    appendTurn('k-last', 'user', 'q1');
+    appendTurn('k-last', 'assistant', 'r1');
+    appendTurn('k-last', 'user', 'q2');
+    appendTurn('k-last', 'assistant', 'r2');
+
+    expect(getLastAssistantReply('k-last')).toBe('r2');
+    expect(getLastAssistantReply('k-empty')).toBeNull();
   });
 });
 
@@ -208,7 +274,7 @@ describe('compactIfNeeded', () => {
 // ---------------------------------------------------------------------------
 
 describe('getEmailContextBlock', () => {
-  const LONG = 'x'.repeat(5000);
+  const LONG = 'x'.repeat(7000);
 
   it('summarizes long emails once and caches by ref', async () => {
     mockGenerateText.mockResolvedValueOnce('EMAIL SUMMARY');

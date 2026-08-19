@@ -33,7 +33,17 @@ export interface ConversationRecord {
   summary: string;
   /** Cached summary of a long original email (bound to an email ref). */
   emailSummary?: { ref: string; content: string };
+  /** The request that produced the latest reply (for Regenerate after reload). */
+  lastRequest?: LastRequest;
   updatedAt: number;
+}
+
+/** The reply-generation options that produced the most recent reply. */
+export interface LastRequest {
+  instructions: string;
+  tone: string;
+  includeOriginal: boolean;
+  language?: string;
 }
 
 export interface ReplyContextBlock {
@@ -73,7 +83,7 @@ const SUMMARY_MAX_TOKENS = 300;
 const EMAIL_SUMMARY_MAX_TOKENS = 400;
 
 /** Emails longer than this (chars, after pre-truncation) get an AI summary. */
-const LONG_EMAIL_CHARS = 4000;
+const LONG_EMAIL_CHARS = 6000;
 
 const MAX_ENTRIES = 20;
 const STORE_USER_MAX_CHARS = 200;
@@ -251,6 +261,34 @@ export function clearAllConversations(): void {
 }
 
 /**
+ * Remember the request that produced the latest reply so the user can
+ * Regenerate it after leaving and returning to the same email.
+ */
+export function rememberLastRequest(key: string, request: LastRequest): void {
+  if (!shouldPersist(key)) return;
+  const store = sweep(loadStore());
+  const record = store[key] ? cloneRecord(store[key]) : emptyRecord(key);
+  record.lastRequest = { ...request };
+  record.updatedAt = Date.now();
+  store[key] = record;
+  saveStore(sweep(store));
+}
+
+/**
+ * Return the content of the most recent assistant turn (the latest reply),
+ * or null when the conversation has no assistant turns yet.
+ */
+export function getLastAssistantReply(key: string): string | null {
+  const record = getConversation(key);
+  for (let i = record.entries.length - 1; i >= 0; i--) {
+    if (record.entries[i].role === 'assistant') {
+      return record.entries[i].content;
+    }
+  }
+  return null;
+}
+
+/**
  * Build the bounded reply-context block: the compaction summary plus the
  * most recent turns verbatim (truncated). Pure function of the store so it
  * is easy to test.
@@ -347,7 +385,10 @@ export async function compactIfNeeded(key: string): Promise<void> {
   if (!shouldPersist(key) || !record || record.entries.length <= COMPACT_AFTER) return;
 
   const older = record.entries.slice(0, record.entries.length - WINDOW_TURNS * 2);
-  if (older.length === 0) return;
+  // Frequency control: only fold when enough new older turns have
+  // accumulated since the last compaction (≈ every 4 exchanges), so a
+  // single generation does not trigger a compaction round every time.
+  if (older.length < COMPACT_AFTER) return;
 
   try {
     const prompt = buildCompactionPrompt(record.summary, older);

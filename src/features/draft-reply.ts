@@ -29,8 +29,11 @@ import {
   buildReplyContext,
   buildReplyContextText,
   buildEmailRef,
+  getConversation,
   getEmailContextBlock,
   compactIfNeeded,
+  rememberLastRequest,
+  getLastAssistantReply,
 } from './conversation-memory';
 
 // ---------------------------------------------------------------------------
@@ -147,12 +150,53 @@ export async function generateReply(options: DraftReplyOptions): Promise<string>
   lastReplyOptions = { ...options };
   lastReply = reply;
 
-  // Record the exchange; compact older turns (best-effort, never blocks)
+  // Record the exchange; remember the request for later Regenerate; compact
+  // older turns (best-effort, never blocks)
   appendTurn(sessionKey, 'user', options.instructions);
   appendTurn(sessionKey, 'assistant', reply);
+  rememberLastRequest(sessionKey, {
+    instructions: options.instructions,
+    tone: options.tone || 'professional',
+    includeOriginal: options.includeOriginal !== false,
+    language: options.language,
+  });
   void compactIfNeeded(sessionKey);
 
   return reply;
+}
+
+/**
+ * Restore the most recent reply (and the request that produced it) from the
+ * per-email conversation history. Used when the user returns to an email so
+ * Insert / Regenerate / Refine work again after a reload.
+ *
+ * Returns `null` when the conversation has no reply to restore.
+ */
+export function restoreFromHistory(key: string): { reply: string; options: DraftReplyOptions } | null {
+  const record = getConversation(key);
+  if (record.entries.length === 0) return null;
+
+  const reply = getLastAssistantReply(key);
+  if (!reply) return null;
+
+  const lastUser = [...record.entries].reverse().find((e) => e.role === 'user');
+  const options: DraftReplyOptions = record.lastRequest
+    ? {
+        instructions: record.lastRequest.instructions,
+        tone: record.lastRequest.tone || 'professional',
+        includeOriginal: record.lastRequest.includeOriginal !== false,
+        language: record.lastRequest.language || 'auto',
+      }
+    : {
+        instructions: lastUser?.content || '',
+        tone: 'professional',
+        includeOriginal: true,
+        language: 'auto',
+      };
+
+  lastReply = reply;
+  lastReplyOptions = { ...options };
+  return { reply, options };
 }
 
 /**
