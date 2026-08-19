@@ -456,24 +456,14 @@ function restoreReplyFromHistory(): void {
   try {
     const key = getSessionKey();
     const restored = restoreFromHistory(key);
-    const rec = getConversation(key);
-    const avgTurns = rec.entries.length;
 
     if (!restored) {
       hideElement('reply-result-section');
-      hideElement('reply-conv-restore-msg');
       return;
     }
 
     setPreview('reply-preview', restored.reply);
     showElement('reply-result-section');
-
-    const msg = $('reply-conv-restore-msg');
-    if (msg) {
-      const exchanges = Math.max(1, Math.ceil(avgTurns / 2));
-      msg.textContent = `↩ Restored this email's earlier conversation${exchanges > 1 ? ` (${exchanges} exchanges)` : ''} — includes the latest reply.`;
-      msg.classList.remove('hidden');
-    }
 
     // In compose mode, Reply All is redundant — user already chose reply type
     if (getItemMode() === 'compose') {
@@ -639,7 +629,6 @@ async function handleGenerateReply(): Promise<void> {
     const reply = await generateReply(options);
     setPreview('reply-preview', reply);
     showElement('reply-result-section');
-    hideElement('reply-conv-restore-msg');
     renderConversationPanel();
     $('reply-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -661,7 +650,6 @@ async function handleRegenerateReply(): Promise<void> {
   try {
     const reply = await regenerateReply();
     setPreview('reply-preview', reply);
-    hideElement('reply-conv-restore-msg');
     renderConversationPanel();
   } catch (err: any) {
     showError(err.message || 'Failed to regenerate reply. Please try again.');
@@ -685,7 +673,6 @@ async function handleRefineReply(): Promise<void> {
   try {
     const reply = await refineReply(refinement);
     setPreview('reply-preview', reply);
-    hideElement('reply-conv-restore-msg');
     renderConversationPanel();
     if (input) input.value = '';
   } catch (err: any) {
