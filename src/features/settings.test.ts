@@ -59,6 +59,8 @@ function makeSettings(overrides: Partial<AIComposeSettings> = {}): AIComposeSett
     defaultTone: 'professional',
     defaultSummaryStyle: 'bullets',
     defaultLanguage: 'English',
+    replyLanguage: 'auto',
+    translateLanguage: '',
     presetRules: {
       noPlaceholders: true,
       noSignature: true,
@@ -99,6 +101,44 @@ describe('saveSettings / loadSettings', () => {
     saveSettings(makeSettings({ defaultTone: 'friendly' }));
     resetSettings();
     expect(loadSettings().defaultTone).toBe('professional');
+  });
+
+  test('replyLanguage defaults to auto and persists a round-trip', () => {
+    const s1 = loadSettings();
+    expect(s1.replyLanguage).toBe('auto');
+
+    saveSettings(makeSettings({ replyLanguage: 'Chinese (Simplified)' }));
+    const s2 = loadSettings();
+    expect(s2.replyLanguage).toBe('Chinese (Simplified)');
+  });
+
+  test('translateLanguage defaults to unset and persists a round-trip', () => {
+    const s1 = loadSettings();
+    expect(s1.translateLanguage).toBe('');
+
+    saveSettings(makeSettings({ translateLanguage: 'Japanese' }));
+    const s2 = loadSettings();
+    expect(s2.translateLanguage).toBe('Japanese');
+  });
+
+  test('legacy stored settings without the new fields fall back to defaults', () => {
+    const legacy = makeSettings({ defaultTone: 'friendly' }) as unknown as Record<string, unknown>;
+    delete legacy.replyLanguage;
+    delete legacy.translateLanguage;
+    (global as unknown as { localStorage: Storage }).localStorage.setItem(
+      'ai_compose_settings',
+      JSON.stringify(legacy),
+    );
+
+    // Fresh module instance → cold cache → reads the legacy raw storage.
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const fresh = require('./settings') as typeof import('./settings');
+      const loaded = fresh.loadSettings();
+      expect(loaded.replyLanguage).toBe('auto');
+      expect(loaded.translateLanguage).toBe('');
+      expect(loaded.defaultTone).toBe('friendly');
+    });
   });
 });
 

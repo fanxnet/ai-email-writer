@@ -8,8 +8,9 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateReply, refineReply, restoreFromHistory } from './draft-reply';
+import { generateReply, refineReply, restoreFromHistory, clearEmailContext } from './draft-reply';
 import { getConversation, appendTurn, rememberLastRequest } from './conversation-memory';
+import { getCurrentEmailBody } from '../services/outlook';
 
 jest.mock('../services/ai-service', () => ({ generateText: jest.fn() }));
 jest.mock('../services/outlook', () => ({
@@ -22,6 +23,7 @@ jest.mock('./auto-save', () => ({ getSessionKey: jest.fn().mockReturnValue('conv
 import { generateText as generateTextMockValue } from '../services/ai-service';
 
 const mockGenerateText = generateTextMockValue as jest.Mock;
+const mockGetBody = getCurrentEmailBody as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // localStorage mock (node test env)
@@ -54,6 +56,8 @@ const SESSION_KEY = 'conv:integration';
 beforeEach(() => {
   (globalThis as any).localStorage = new MemoryStorage();
   mockGenerateText.mockReset();
+  clearEmailContext();
+  mockGetBody.mockResolvedValue('We need the quarterly figures by Friday. Please confirm your availability for a review meeting.');
 });
 
 // ---------------------------------------------------------------------------
@@ -196,5 +200,76 @@ describe('restoreFromHistory', () => {
     expect(restored?.options.instructions).toBe('Legacy question');
     expect(restored?.options.tone).toBe('professional');
     expect(restored?.options.language).toBe('auto');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reply language resolution (auto-detect / explicit / instruction priority)
+// ---------------------------------------------------------------------------
+
+const CHINESE_EMAIL = '尊敬的张先生您好，感谢您上周的来信。关于合作协议的条款，我们已经请法务团队复核，预计周五给出最终意见，届时会再与您联系。';
+
+describe('generateReply language resolution', () => {
+  const options = () => ({
+    instructions: 'Draft a reply',
+    tone: 'professional',
+    includeOriginal: true,
+    language: 'auto',
+  });
+
+  it('auto + English email → pins the concrete detected language and injects the rule', async () => {
+    mockGenerateText.mockResolvedValue('Reply body');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('- Language: English');
+    expect(prompt).toContain('IMPORTANT — Language rule:');
+    expect(prompt).toContain('explicitly and deliberately request');
+  });
+
+  it('auto + Chinese email → pins Chinese and injects the rule', async () => {
+    mockGetBody.mockResolvedValue(CHINESE_EMAIL);
+    mockGenerateText.mockResolvedValue('回复正文');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('- Language: Chinese');
+    expect(prompt).toContain('IMPORTANT — Language rule:');
+  });
+
+  it('auto + ambiguous email → falls back and still injects the rule', async () => {
+    mockGetBody.mockResolvedValue('See attached.');
+    mockGenerateText.mockResolvedValue('Reply body');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).not.toContain('- Language: English');
+    expect(prompt).toContain('the same language as the original email');
+    expect(prompt).toContain('IMPORTANT — Language rule:');
+  });
+
+  it('explicit language selection → used verbatim and no rule injected', async () => {
+    mockGenerateText.mockResolvedValue('保留原文案的回复');
+
+    await generateReply({ ...options(), language: 'Chinese (Simplified)' });
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('- Language: Chinese (Simplified)');
+    expect(prompt).not.toContain('IMPORTANT — Language rule:');
+  });
+
+  it('auto + English email + Chinese instructions → rule lets an explicit instruction language win', async () => {
+    mockGenerateText.mockResolvedValue('回复内容');
+
+    await generateReply({ ...options(), instructions: '请用中文回复对方，婉拒本次邀请' });
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('请用中文回复对方');
+    expect(prompt).toContain('- Language: English'); // detected from the email
+    expect(prompt).toContain('IMPORTANT — Language rule:');
+    expect(prompt).toContain('follow that explicit request instead'); // exception clause
   });
 });

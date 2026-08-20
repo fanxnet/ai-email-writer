@@ -38,6 +38,19 @@ export interface AIComposeSettings {
   defaultSummaryStyle: SummaryStyle;
   /** Default target language for Translate. */
   defaultLanguage: string;
+  /**
+   * Persisted Reply-language dropdown value.
+   * 'auto' = match the original email's language (the system default).
+   * Any other value is the user's chosen language and is reused on the
+   * next reply. Empty/missing falls back to 'auto'.
+   */
+  replyLanguage: string;
+  /**
+   * Persisted Translate-language dropdown value.
+   * '' = unset → falls back to `defaultLanguage`. Once the user changes
+   * the Translate dropdown this value is stored and reused.
+   */
+  translateLanguage: string;
   /** Preset rules toggled on/off by the user. */
   presetRules: Record<string, boolean>;
   /** Free-text custom rules supplied by the user. */
@@ -64,6 +77,8 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   defaultTone: "professional",
   defaultSummaryStyle: "bullets",
   defaultLanguage: "English",
+  replyLanguage: "auto",
+  translateLanguage: "",
   presetRules: {
     noPlaceholders: true,
     noSignature: true,

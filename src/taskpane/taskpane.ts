@@ -1180,9 +1180,13 @@ Office.onReady((info) => {
       ) as HTMLInputElement | null;
       if (summaryRadio) summaryRadio.checked = true;
 
-      // Translation language
+      // Reply language (persisted; 'auto' = match original email by default)
+      const replyLang = $('reply-language') as HTMLSelectElement | null;
+      if (replyLang) replyLang.value = s.replyLanguage || 'auto';
+
+      // Translation language (persisted, falls back to default language)
       const langSelect = $('translate-language') as HTMLSelectElement | null;
-      if (langSelect) langSelect.value = s.defaultLanguage;
+      if (langSelect) langSelect.value = s.translateLanguage || s.defaultLanguage;
 
       // Settings form itself
       const sProvider = $('settings-provider') as HTMLSelectElement | null;
@@ -1225,6 +1229,21 @@ Office.onReady((info) => {
     // Persist instructions when the sidebar is closed / the add-in is unloaded
     window.addEventListener('pagehide', autoSaveSession);
     window.addEventListener('beforeunload', autoSaveSession);
+
+    // Persist the user's Reply / Translate language choices immediately so
+    // they survive reloads and become the default on the next use.
+    const persistReplyLanguage = (): void => {
+      const sel = $('reply-language') as HTMLSelectElement | null;
+      if (!sel) return;
+      saveSettings({ ...loadSettings(), replyLanguage: sel.value || 'auto' });
+    };
+    const persistTranslateLanguage = (): void => {
+      const sel = $('translate-language') as HTMLSelectElement | null;
+      if (!sel) return;
+      saveSettings({ ...loadSettings(), translateLanguage: sel.value });
+    };
+    $('reply-language')?.addEventListener('change', persistReplyLanguage);
+    $('translate-language')?.addEventListener('change', persistTranslateLanguage);
 
     // --- Outlook theme detection (light/dark) ---
     try {
