@@ -86,13 +86,16 @@ const EMAIL_SUMMARY_MAX_TOKENS = 400;
 const LONG_EMAIL_CHARS = 8000;
 
 const MAX_ENTRIES = 20;
-const STORE_USER_MAX_CHARS = 200;
+// User instructions are high-density text (e.g. Chinese); the reply-instructions
+// input already caps at 1000 chars, and refine input has no cap, so keep a
+// generous ceiling that still guards against pathological input.
+const STORE_USER_MAX_CHARS = 1500;
 // Assistant replies are kept in full (up to ~4k tokens of text) so the reply
 // can be restored/refined/displayed without losing the tail of long drafts.
 const STORE_ASSISTANT_MAX_CHARS = 16000;
-const INJECT_USER_MAX_CHARS = 100;
-const INJECT_ASSISTANT_MAX_CHARS = 800;
-const EMAIL_REF_SUBJECT_CHARS = 60;
+const INJECT_USER_MAX_CHARS = 1500;
+const INJECT_ASSISTANT_MAX_CHARS = 3000;
+const EMAIL_REF_SUBJECT_CHARS = 120;
 
 /** Session keys falling back to this value are not persisted across reloads. */
 const RESERVED_KEY = 'default';

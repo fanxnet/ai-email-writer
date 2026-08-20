@@ -136,6 +136,21 @@
   color: var(--color-aic-blue);
 }
 
+/* Conversation history panel — floats above the toolbar so the lower UI
+   stays put while opened. Bounded height with its own scrollbar. */
+.aic-conv-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: min(400px, calc(100vw - 2rem));
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 30;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
 .aic-split--open .aic-tab--icon {
   color: var(--color-aic-blue);
   background: var(--color-aic-blue-light);

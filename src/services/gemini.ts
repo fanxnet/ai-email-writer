@@ -489,7 +489,7 @@ function classifyError(error: unknown): GeminiError {
   // Server errors (5xx) are retryable
   if (statusCode && statusCode >= 500) {
     return new GeminiError(
-      `Server error (${statusCode}). Retrying…`,
+      `Server error (${statusCode}). Please wait a moment and try again.`,
       GeminiErrorCode.UNKNOWN,
       true,
       statusCode,

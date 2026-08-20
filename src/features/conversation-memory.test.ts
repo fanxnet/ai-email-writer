@@ -108,14 +108,27 @@ describe('appendTurn', () => {
   });
 
   it('caps the stored length of user content and keeps longer assistant replies', () => {
-    appendTurn('k3', 'user', 'x'.repeat(300));
+    appendTurn('k3', 'user', 'x'.repeat(2000));
     appendTurn('k3', 'assistant', 'y'.repeat(1200));
 
     const rec = getConversation('k3');
-    expect(rec.entries[0].content).toHaveLength(200);
+    expect(rec.entries[0].content).toHaveLength(1500);
     // Assistant replies are retained in full (no 1000-char truncation) so
     // long drafts survive re-entry / refinement unchanged.
     expect(rec.entries[1].content).toHaveLength(1200);
+  });
+
+  it('retains a long Chinese instruction in full (no aggressive truncation)', () => {
+    // 320 Chinese characters — well under the 1500-char ceiling, but the old
+    // 200-char store / 100-char inject caps would have lost the tail.
+    const instruction = '请'.repeat(320);
+    appendTurn('k5', 'user', instruction);
+
+    const rec = getConversation('k5');
+    expect(rec.entries[0].content).toBe(instruction);
+
+    const block = buildReplyContext('k5');
+    expect(block.recent).toContain('You: ' + instruction);
   });
 
   it('still caps assistant content at the storage ceiling', () => {
@@ -169,6 +182,15 @@ describe('buildReplyContext', () => {
     const txt = buildReplyContextText({ summary: 'S', recent: 'You: q\nAssistant: r' });
     expect(txt).toContain('Summary: S');
     expect(txt).toContain('Most recent exchanges');
+  });
+
+  it('injects a long assistant reply in full (no 800-char cap)', () => {
+    const longReply = 'R'.repeat(2000);
+    appendTurn('k9', 'user', 'q');
+    appendTurn('k9', 'assistant', longReply);
+
+    const block = buildReplyContext('k9');
+    expect(block.recent).toContain('Assistant: ' + longReply);
   });
 });
 

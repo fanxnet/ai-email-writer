@@ -575,18 +575,18 @@
                 <button class="aic-dropdown__item" type="button" data-action="hide">Hide</button>
                 <button class="aic-dropdown__item" type="button" data-action="clear">Clear</button>
               </div>
-            </div>
-          </div>
 
-          <!-- Conversation history panel (directly below the toolbar) -->
-          <div id="reply-conversation-panel" class="hidden mb-xs">
-            <div class="border border-aic-border rounded-sm bg-aic-bg p-sm">
-              <div class="flex items-center justify-between mb-sm">
-                <span class="text-sm font-medium text-aic-text-secondary">Conversation</span>
+              <!-- Conversation history panel (floats above the toolbar) -->
+              <div id="reply-conversation-panel" class="aic-conv-panel hidden">
+                <div class="border border-aic-border rounded-sm bg-aic-bg p-sm">
+                  <div class="flex items-center justify-between mb-sm">
+                    <span class="text-sm font-medium text-aic-text-secondary">Conversation</span>
+                  </div>
+                  <div id="reply-conv-summary" class="hidden mb-sm text-xs text-aic-text-tertiary leading-relaxed"></div>
+                  <div id="reply-conv-list" class="flex flex-col gap-xs"></div>
+                  <div id="reply-conv-empty" class="hidden text-xs text-aic-text-tertiary"></div>
+                </div>
               </div>
-              <div id="reply-conv-summary" class="hidden mb-sm text-xs text-aic-text-tertiary leading-relaxed"></div>
-              <div id="reply-conv-list" class="flex flex-col gap-xs"></div>
-              <div id="reply-conv-empty" class="hidden text-xs text-aic-text-tertiary"></div>
             </div>
           </div>
           <div>
