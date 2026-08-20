@@ -12,14 +12,11 @@ import { getSetting } from '../features/settings';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Base request timeout (ms). */
-const BASE_TIMEOUT_MS = 30_000;
-
-/** Extra timeout per ~5k chars of prompt (ms). */
-const TIMEOUT_PER_5K_CHARS_MS = 10_000;
-
-/** Hard cap for the adaptive timeout (ms). */
-const MAX_TIMEOUT_MS = 90_000;
+/** Streaming health-monitoring tiers (ms). All are wall-clock and independent
+ * of prompt size — a model that goes quiet is hanging regardless of input. */
+const CONNECT_TIMEOUT_MS = 30_000; // No response headers at all.
+const STALL_TIMEOUT_MS = 60_000; // No new body data after the stream started.
+const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
 
 /** Maximum retry attempts after the initial call. */
 const MAX_RETRIES = 3;
@@ -29,6 +26,8 @@ const INITIAL_RETRY_DELAY_MS = 1000;
 
 /** Exponential backoff factor applied after each retry. */
 const RETRY_BACKOFF_FACTOR = 2;
+
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,53 +90,210 @@ export function abortDeepSeekRequest(): void {
 // Low-level HTTP helpers
 // ---------------------------------------------------------------------------
 
-/** Calculate adaptive timeout based on prompt length (mirrors gemini). */
-function calcTimeout(promptLength: number, overrideMs?: number): number {
-  if (overrideMs) return overrideMs;
-  const scaled = BASE_TIMEOUT_MS + Math.ceil(promptLength / 5000) * TIMEOUT_PER_5K_CHARS_MS;
-  return Math.min(scaled, MAX_TIMEOUT_MS);
-}
-
 /**
- * Fetch with an adaptive timeout via AbortController. Timeouts are a hard
- * failure (never retried); pure network failures are classified as retryable.
+ * Stream a chat-completion request from DeepSeek and aggregate the response.
+ *
+ * Uses `stream: true` (SSE) with health monitoring:
+ *  - Connect window: fails if response headers don't arrive within
+ *    `CONNECT_TIMEOUT_MS` (genuine network/host problem).
+ *  - Stall window: fails if the body goes quiet for `STALL_TIMEOUT_MS`
+ *    (e.g. a model that stops generating — retrying won't help).
+ *  - Overall ceiling: fails if the whole response exceeds `OVERALL_TIMEOUT_MS`.
+ *
+ * The request is registered on `activeController` so `abortDeepSeekRequest`
+ * still cancels it. Timeouts are hard failures (never retried).
  */
-async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+async function streamChatCompletion(
+  body: Record<string, unknown>,
+  onStream?: (delta: string) => void,
+): Promise<string> {
   const controller = new AbortController();
   activeController = controller;
-  let timedOut = false;
+  const startedAt = Date.now();
+  let text = '';
+  let firstByte = false;
 
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, ms);
+  const buildBody = () =>
+    JSON.stringify({
+      ...body,
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+  const elapsed = () => Date.now() - startedAt;
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } catch (error: any) {
-    if (timedOut) {
+    // Connect window: headers must arrive before CONNECT_TIMEOUT_MS.
+    const connectBudget = Math.min(CONNECT_TIMEOUT_MS, OVERALL_TIMEOUT_MS);
+    const response = await raceWithTimeout(
+      fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepseekApiKey}`,
+        },
+        body: buildBody(),
+        signal: controller.signal,
+      }),
+      connectBudget,
+      () => streamTimeoutError('connect'),
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw classifyHttpError(response.status, errText);
+    }
+
+    if (!response.body) {
       throw new DeepSeekError(
-        `Request timed out after ${ms / 1000}s. The email may be too long — try a shorter selection.`,
-        DeepSeekErrorCode.TIMEOUT,
+        'DeepSeek returned an empty body.',
+        DeepSeekErrorCode.EMPTY_RESPONSE,
         false,
       );
     }
-    if (controller.signal.aborted) {
-      throw new DeepSeekError(
-        'Request aborted.',
-        DeepSeekErrorCode.ABORTED,
-        false,
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    // The stream is now established (headers received) — remaining reads use
+    // the stall window.
+    firstByte = true;
+
+    for (;;) {
+      const overallLeft = OVERALL_TIMEOUT_MS - elapsed();
+      if (overallLeft <= 0) throw streamTimeoutError('overall');
+
+      const waitMs = Math.min(STALL_TIMEOUT_MS, overallLeft);
+      const { done, value } = await raceWithTimeout(
+        reader.read(),
+        waitMs,
+        () => streamTimeoutError(firstByte ? 'stall' : 'connect'),
       );
+
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+
+        try {
+          const chunk = JSON.parse(payload);
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string' && delta.length > 0) {
+            text += delta;
+            onStream?.(delta);
+          }
+        } catch {
+          // Malformed/incomplete SSE line — skip and keep going.
+        }
+      }
     }
-    throw new DeepSeekError(
-      `Network error: ${error?.message ?? String(error)}`,
+
+    // Flush any trailing bytes that never ended with a newline.
+    const tail = decoder.decode();
+    if (tail) {
+      buffer += tail;
+      const line = buffer.trim();
+      if (line.startsWith('data:')) {
+        const payload = line.slice(5).trim();
+        if (payload && payload !== '[DONE]') {
+          try {
+            const chunk = JSON.parse(payload);
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (typeof delta === 'string' && delta.length > 0) {
+              text += delta;
+              onStream?.(delta);
+            }
+          } catch {
+            // Ignore.
+          }
+        }
+      }
+    }
+
+    return text;
+  } catch (error) {
+    throw classifyStreamError(error, controller);
+  } finally {
+    if (activeController === controller) activeController = null;
+  }
+}
+
+/** Build a typed timeout error for one of the health-monitoring tiers. */
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {
+  let message: string;
+  if (kind === 'connect') {
+    message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
+  } else if (kind === 'stall') {
+    message = `The model went quiet for ${STALL_TIMEOUT_MS / 1000}s with no new data — try again.`;
+  } else {
+    message = `The response did not finish within ${OVERALL_TIMEOUT_MS / 1000}s — try a shorter request.`;
+  }
+  // Not transient — retrying a hanging stream won't help.
+  return new DeepSeekError(message, DeepSeekErrorCode.TIMEOUT, false);
+}
+
+/** Race a promise against a timeout that fires `onTimeout` (an Error). */
+function raceWithTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  onTimeout: () => Error,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(onTimeout());
+      }
+    }, ms);
+
+    promise.then(
+      (value) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        }
+      },
+      (error) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(error);
+        }
+      },
+    );
+  });
+}
+
+/** Classify a stream/read error, honouring user aborts and typed errors. */
+function classifyStreamError(error: unknown, controller: AbortController): DeepSeekError {
+  if (error instanceof DeepSeekError) return error;
+
+  if (controller.signal.aborted) {
+    return new DeepSeekError('Request aborted.', DeepSeekErrorCode.ABORTED, false);
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  if (/network|fetch failed|ECONNREFUSED|ENOTFOUND|offline/i.test(message)) {
+    return new DeepSeekError(
+      `Network error: ${message}`,
       DeepSeekErrorCode.NETWORK_ERROR,
       true,
     );
-  } finally {
-    clearTimeout(timer);
-    if (activeController === controller) activeController = null;
   }
+
+  return new DeepSeekError(message, DeepSeekErrorCode.UNKNOWN, false);
 }
 
 /** Classify a non-2xx HTTP response into a typed, retry-aware error. */
@@ -218,34 +374,18 @@ export async function generateText(
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
   const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-v4-flash';
-  const timeoutMs = calcTimeout(prompt.length, options.timeoutMs);
 
   const callFn = async () => {
-    const response = await fetchWithTimeout(
-      'https://api.deepseek.com/chat/completions',
+    const text = await streamChatCompletion(
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekApiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelName,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: options.temperature ?? 1.0,
-          max_tokens: options.maxOutputTokens ?? 2048,
-        }),
+        model: modelName,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: options.temperature ?? 1.0,
+        max_tokens: options.maxOutputTokens ?? 2048,
       },
-      timeoutMs,
+      options.onStream,
     );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw classifyHttpError(response.status, errText);
-    }
-
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content;
     if (!text || !text.trim()) {
       throw new DeepSeekError(
         'The model returned an empty response.',
@@ -267,38 +407,22 @@ export async function generateJson<T = Record<string, unknown>>(
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
   const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-v4-flash';
-  const timeoutMs = calcTimeout(prompt.length, options.timeoutMs);
 
   const callFn = async () => {
-    const response = await fetchWithTimeout(
-      'https://api.deepseek.com/chat/completions',
+    const text = await streamChatCompletion(
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekApiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelName,
-          messages: [
-            ...(options.systemInstruction ? [{ role: 'system', content: options.systemInstruction }] : []),
-            { role: 'user', content: prompt },
-          ],
-          temperature: options.temperature ?? 0.1,
-          max_tokens: options.maxOutputTokens ?? 1024,
-          response_format: { type: 'json_object' },
-        }),
+        model: modelName,
+        messages: [
+          ...(options.systemInstruction ? [{ role: 'system', content: options.systemInstruction }] : []),
+          { role: 'user', content: prompt },
+        ],
+        temperature: options.temperature ?? 0.1,
+        max_tokens: options.maxOutputTokens ?? 1024,
+        response_format: { type: 'json_object' },
       },
-      timeoutMs,
+      options.onStream,
     );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw classifyHttpError(response.status, errText);
-    }
-
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content;
     if (!text || !text.trim()) {
       throw new DeepSeekError(
         'The model returned an empty response.',

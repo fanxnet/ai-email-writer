@@ -43,7 +43,10 @@ let lastDraft: string = '';
  * Generate an email draft from user instructions.
  * Returns the generated draft text (including "Subject: ..." on the first line).
  */
-export async function generateDraft(options: DraftEmailOptions): Promise<string> {
+export async function generateDraft(
+  options: DraftEmailOptions,
+  onStream?: (delta: string) => void,
+): Promise<string> {
   if (!options.instructions || !options.instructions.trim()) {
     throw new Error('Please enter your instructions or bullet points.');
   }
@@ -62,6 +65,7 @@ export async function generateDraft(options: DraftEmailOptions): Promise<string>
   const draft = await generateText(prompt, {
     temperature: 0.7,
     maxOutputTokens: getMaxTokensForLength(options.length),
+    onStream,
   });
 
   // Store for regenerate/refine
@@ -74,17 +78,20 @@ export async function generateDraft(options: DraftEmailOptions): Promise<string>
 /**
  * Regenerate the last draft with the same inputs.
  */
-export async function regenerateDraft(): Promise<string> {
+export async function regenerateDraft(onStream?: (delta: string) => void): Promise<string> {
   if (!lastOptions) {
     throw new Error('No previous draft to regenerate. Please generate a draft first.');
   }
-  return generateDraft(lastOptions);
+  return generateDraft(lastOptions, onStream);
 }
 
 /**
  * Refine the last generated draft with follow-up instructions.
  */
-export async function refineDraft(refinement: string): Promise<string> {
+export async function refineDraft(
+  refinement: string,
+  onStream?: (delta: string) => void,
+): Promise<string> {
   if (!lastDraft) {
     throw new Error('No draft to refine. Please generate a draft first.');
   }
@@ -111,6 +118,7 @@ Requirements:
   const refined = await generateText(prompt, {
     temperature: 0.6,
     maxOutputTokens: 2048,
+    onStream,
   });
 
   lastDraft = refined;

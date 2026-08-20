@@ -49,7 +49,9 @@ let lastRawResponse: string = '';
 /**
  * Extract action items from the current email or thread.
  */
-export async function extractActionItems(): Promise<ActionItem[]> {
+export async function extractActionItems(
+  onStream?: (delta: string) => void,
+): Promise<ActionItem[]> {
   const rawContent = await readEmailContent();
 
   if (!rawContent.trim()) {
@@ -65,6 +67,7 @@ export async function extractActionItems(): Promise<ActionItem[]> {
   const raw = await generateText(prompt, {
     temperature: 0.2, // Low temperature for factual extraction
     maxOutputTokens: 2048,
+    onStream,
   });
 
   lastRawResponse = raw;
@@ -75,8 +78,8 @@ export async function extractActionItems(): Promise<ActionItem[]> {
 /**
  * Re-extract action items from the same email.
  */
-export async function regenerateActions(): Promise<ActionItem[]> {
-  return extractActionItems();
+export async function regenerateActions(onStream?: (delta: string) => void): Promise<ActionItem[]> {
+  return extractActionItems(onStream);
 }
 
 /**

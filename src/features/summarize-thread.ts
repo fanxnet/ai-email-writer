@@ -55,7 +55,10 @@ let lastOptions: SummarizeOptions | null = null;
 /**
  * Summarize the current email or conversation thread.
  */
-export async function summarizeThread(options: SummarizeOptions): Promise<string> {
+export async function summarizeThread(
+  options: SummarizeOptions,
+  onStream?: (delta: string) => void,
+): Promise<string> {
   // Try to load the full conversation thread
   let rawThread: string;
 
@@ -97,6 +100,7 @@ export async function summarizeThread(options: SummarizeOptions): Promise<string
   const summary = await generateText(prompt, {
     temperature: 0.4, // Lower temperature for factual summaries
     maxOutputTokens: getMaxTokensForLength(options.length),
+    onStream,
   });
 
   lastSummary = summary;
@@ -108,11 +112,11 @@ export async function summarizeThread(options: SummarizeOptions): Promise<string
 /**
  * Re-summarize with the same options (different phrasing).
  */
-export async function regenerateSummary(): Promise<string> {
+export async function regenerateSummary(onStream?: (delta: string) => void): Promise<string> {
   if (!lastOptions) {
     throw new Error('No previous summary to regenerate. Please summarize first.');
   }
-  return summarizeThread(lastOptions);
+  return summarizeThread(lastOptions, onStream);
 }
 
 /**

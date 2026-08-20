@@ -753,6 +753,38 @@
   box-shadow: 0 0 0 2px var(--color-aic-blue-glow);
 }
 
+/* ================================================================
+   Streaming output — blinking caret while the model generates
+   ================================================================ */
+
+.aic-stream-caret {
+  display: inline-block;
+  width: 0;
+  margin-left: 2px;
+  border-right: 2px solid var(--color-aic-blue);
+  animation: aic-caret-blink 0.9s steps(2, start) infinite;
+}
+
+@keyframes aic-caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.aic-suggestions--streaming {
+  white-space: pre-wrap;
+  font-size: var(--text-sm);
+  color: var(--color-aic-text-secondary);
+  border: 1px dashed var(--color-aic-border);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
+}
+
 .aic-copy-btn {
   position: absolute;
   top: var(--spacing-sm);

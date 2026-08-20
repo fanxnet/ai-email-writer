@@ -62,7 +62,10 @@ let lastResult: TranslateResult | null = null;
 /**
  * Translate the current email body to the target language.
  */
-export async function translateEmail(targetLanguage: string): Promise<TranslateResult> {
+export async function translateEmail(
+  targetLanguage: string,
+  onStream?: (delta: string) => void,
+): Promise<TranslateResult> {
   const body = await getCurrentEmailBody();
 
   if (!body.trim()) {
@@ -77,6 +80,7 @@ export async function translateEmail(targetLanguage: string): Promise<TranslateR
   const translated = await generateText(prompt, {
     temperature: 0.3,
     maxOutputTokens: 4096,
+    onStream,
   });
 
   lastResult = {
@@ -91,8 +95,11 @@ export async function translateEmail(targetLanguage: string): Promise<TranslateR
 /**
  * Re-translate with the same or different language.
  */
-export async function regenerateTranslation(targetLanguage: string): Promise<TranslateResult> {
-  return translateEmail(targetLanguage);
+export async function regenerateTranslation(
+  targetLanguage: string,
+  onStream?: (delta: string) => void,
+): Promise<TranslateResult> {
+  return translateEmail(targetLanguage, onStream);
 }
 
 /**

@@ -209,6 +209,63 @@ function updatePreviewStats(previewId: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Streaming output writer
+// ---------------------------------------------------------------------------
+
+/**
+ * Prepare a result element to receive streamed text deltas.
+ *
+ * The previous content is left untouched until the first delta actually
+ * arrives (so a failed early-validation call never wipes the prior result).
+ * Once streaming starts, a blinking caret is inserted ahead of the incoming
+ * text. The caller can:
+ *  - `onFirst(fn)` to run something (e.g. reveal the result section, dismiss
+ *    the loading overlay) the moment the first delta arrives,
+ *  - `append(delta)` for each incoming chunk,
+ *  - `finish()` to remove the caret once generation completes,
+ *  - `clear()` to wipe any partial streamed text (e.g. on error).
+ *
+ * Returns `null` when the target element doesn't exist, so callers can safely
+ * fall back to the non-streaming path.
+ */
+function streamInto(previewId: string) {
+  const preview = $(previewId) as HTMLElement | null;
+  if (!preview) return null;
+
+  let caret: HTMLSpanElement | null = null;
+  let started = false;
+  let firstCb: (() => void) | null = null;
+
+  return {
+    onFirst(fn: () => void) {
+      firstCb = fn;
+    },
+    append(delta: string) {
+      if (!started) {
+        started = true;
+        preview.textContent = '';
+        caret = document.createElement('span');
+        caret.className = 'aic-stream-caret';
+        caret.textContent = '▍';
+        preview.appendChild(caret);
+        if (firstCb) firstCb();
+      }
+      caret?.insertAdjacentText('beforebegin', delta);
+    },
+    finish() {
+      caret?.remove();
+      caret = null;
+    },
+    clear() {
+      if (started) {
+        preview.textContent = '';
+        caret = null;
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Email Scoring
 // ---------------------------------------------------------------------------
 
@@ -538,12 +595,20 @@ async function handleGenerate(): Promise<void> {
   hideError();
   showLoading(`Generating with ${providerDisplayName()}...`, instructions.length);
 
-  try {
-    const draft = await generateDraft(options);
-    setPreview('draft-preview', draft);
+  const writer = streamInto('draft-preview');
+  writer?.onFirst(() => {
     showElement('result-section');
+    hideLoading();
+  });
+
+  try {
+    const draft = await generateDraft(options, (delta) => writer?.append(delta));
+    writer?.finish();
+    setPreview('draft-preview', draft);
     $('result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to generate draft. Please try again.');
   } finally {
     hideLoading();
@@ -554,10 +619,19 @@ async function handleRegenerate(): Promise<void> {
   hideError();
   showLoading('Regenerating...');
 
+  const writer = streamInto('draft-preview');
+  writer?.onFirst(() => {
+    showElement('result-section');
+    hideLoading();
+  });
+
   try {
-    const draft = await regenerateDraft();
+    const draft = await regenerateDraft((delta) => writer?.append(delta));
+    writer?.finish();
     setPreview('draft-preview', draft);
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to regenerate. Please try again.');
   } finally {
     hideLoading();
@@ -576,11 +650,20 @@ async function handleRefine(): Promise<void> {
   hideError();
   showLoading('Refining...');
 
+  const writer = streamInto('draft-preview');
+  writer?.onFirst(() => {
+    showElement('result-section');
+    hideLoading();
+  });
+
   try {
-    const draft = await refineDraft(refinement);
+    const draft = await refineDraft(refinement, (delta) => writer?.append(delta));
+    writer?.finish();
     setPreview('draft-preview', draft);
     if (input) input.value = '';
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to refine. Please try again.');
   } finally {
     hideLoading();
@@ -657,10 +740,16 @@ async function handleGenerateReply(): Promise<void> {
   hideError();
   showLoading(`Generating reply with ${providerDisplayName()}...`, instructions.length);
 
-  try {
-    const reply = await generateReply(options);
-    setPreview('reply-preview', reply);
+  const writer = streamInto('reply-preview');
+  writer?.onFirst(() => {
     showElement('reply-result-section');
+    hideLoading();
+  });
+
+  try {
+    const reply = await generateReply(options, (delta) => writer?.append(delta));
+    writer?.finish();
+    setPreview('reply-preview', reply);
     renderConversationPanel();
     $('reply-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -669,6 +758,8 @@ async function handleGenerateReply(): Promise<void> {
       hideElement('btn-insert-reply-all');
     }
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to generate reply. Please try again.');
   } finally {
     hideLoading();
@@ -679,11 +770,20 @@ async function handleRegenerateReply(): Promise<void> {
   hideError();
   showLoading('Regenerating reply...');
 
+  const writer = streamInto('reply-preview');
+  writer?.onFirst(() => {
+    showElement('reply-result-section');
+    hideLoading();
+  });
+
   try {
-    const reply = await regenerateReply();
+    const reply = await regenerateReply((delta) => writer?.append(delta));
+    writer?.finish();
     setPreview('reply-preview', reply);
     renderConversationPanel();
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to regenerate reply. Please try again.');
   } finally {
     hideLoading();
@@ -702,12 +802,21 @@ async function handleRefineReply(): Promise<void> {
   hideError();
   showLoading('Refining reply...');
 
+  const writer = streamInto('reply-preview');
+  writer?.onFirst(() => {
+    showElement('reply-result-section');
+    hideLoading();
+  });
+
   try {
-    const reply = await refineReply(refinement);
+    const reply = await refineReply(refinement, (delta) => writer?.append(delta));
+    writer?.finish();
     setPreview('reply-preview', reply);
     renderConversationPanel();
     if (input) input.value = '';
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to refine reply. Please try again.');
   } finally {
     hideLoading();
@@ -723,8 +832,11 @@ async function handleSuggestReplies(): Promise<void> {
   // Show loading state
   btn.disabled = true;
   if (textSpan) textSpan.textContent = 'Thinking...';
-  container.classList.add('hidden');
+  container.classList.remove('hidden');
   container.innerHTML = '';
+  container.classList.add('aic-suggestions--streaming');
+
+  const writer = streamInto('reply-suggestions');
 
   try {
     const { getEmailContext } = await import('../features/draft-reply');
@@ -742,9 +854,15 @@ ${emailSummary}`;
     const result = await generateText(prompt, {
       temperature: 0.9,
       maxOutputTokens: 1024,
+      onStream: (delta) => {
+        writer?.append(delta);
+      },
     });
 
     console.log('[Suggest replies] Raw response:', result);
+
+    writer?.finish();
+    container.innerHTML = '';
 
     // Parse line-separated suggestions — strip any numbering, bullets, or quotes
     const suggestions = result
@@ -776,8 +894,12 @@ ${emailSummary}`;
       container.appendChild(chip);
     });
 
-    container.classList.remove('hidden');
+    container.classList.remove('aic-suggestions--streaming');
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
+    container.classList.remove('aic-suggestions--streaming');
+    hideElement('reply-suggestions');
     showError(err.message || 'Failed to generate suggestions.');
   } finally {
     btn.disabled = false;
@@ -837,12 +959,20 @@ async function handleSummarize(): Promise<void> {
   hideError();
   showLoading(`Summarizing with ${providerDisplayName()}...`);
 
-  try {
-    const summary = await summarizeThread(options);
-    setPreview('summary-preview', summary);
+  const writer = streamInto('summary-preview');
+  writer?.onFirst(() => {
     showElement('summarize-result-section');
+    hideLoading();
+  });
+
+  try {
+    const summary = await summarizeThread(options, (delta) => writer?.append(delta));
+    writer?.finish();
+    setPreview('summary-preview', summary);
     $('summarize-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to summarize. Please try again.');
   } finally {
     hideLoading();
@@ -853,10 +983,19 @@ async function handleRegenerateSummary(): Promise<void> {
   hideError();
   showLoading('Regenerating summary...');
 
+  const writer = streamInto('summary-preview');
+  writer?.onFirst(() => {
+    showElement('summarize-result-section');
+    hideLoading();
+  });
+
   try {
-    const summary = await regenerateSummary();
+    const summary = await regenerateSummary((delta) => writer?.append(delta));
+    writer?.finish();
     setPreview('summary-preview', summary);
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to regenerate summary. Please try again.');
   } finally {
     hideLoading();
@@ -907,15 +1046,23 @@ async function handleImprove(): Promise<void> {
   hideError();
   showLoading(`Improving with ${providerDisplayName()}...`);
 
+  const writer = streamInto('improve-diff');
+  writer?.onFirst(() => {
+    showElement('improve-result-section');
+    hideLoading();
+  });
+
   try {
-    const result = await improveWriting(options);
+    const result = await improveWriting(options, (delta) => writer?.append(delta));
+    writer?.finish();
     const diffContainer = $('improve-diff');
     if (diffContainer) {
       diffContainer.innerHTML = generateDiffHtml(result.original, result.improved);
     }
-    showElement('improve-result-section');
     $('improve-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to improve text. Please try again.');
   } finally {
     hideLoading();
@@ -926,13 +1073,22 @@ async function handleRegenerateImprove(): Promise<void> {
   hideError();
   showLoading('Regenerating improvement...');
 
+  const writer = streamInto('improve-diff');
+  writer?.onFirst(() => {
+    showElement('improve-result-section');
+    hideLoading();
+  });
+
   try {
-    const result = await regenerateImprovement();
+    const result = await regenerateImprovement((delta) => writer?.append(delta));
+    writer?.finish();
     const diffContainer = $('improve-diff');
     if (diffContainer) {
       diffContainer.innerHTML = generateDiffHtml(result.original, result.improved);
     }
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to regenerate. Please try again.');
   } finally {
     hideLoading();
@@ -970,15 +1126,23 @@ async function handleExtract(): Promise<void> {
   hideError();
   showLoading('Scanning for action items...');
 
+  const writer = streamInto('extract-checklist');
+  writer?.onFirst(() => {
+    showElement('extract-result-section');
+    hideLoading();
+  });
+
   try {
-    const items = await extractActionItems();
+    const items = await extractActionItems((delta) => writer?.append(delta));
+    writer?.finish();
     const container = $('extract-checklist');
     if (container) {
       container.innerHTML = renderChecklistHtml(items);
     }
-    showElement('extract-result-section');
     $('extract-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to extract action items.');
   } finally {
     hideLoading();
@@ -989,13 +1153,22 @@ async function handleRegenerateExtract(): Promise<void> {
   hideError();
   showLoading('Re-scanning for action items...');
 
+  const writer = streamInto('extract-checklist');
+  writer?.onFirst(() => {
+    showElement('extract-result-section');
+    hideLoading();
+  });
+
   try {
-    const items = await regenerateActions();
+    const items = await regenerateActions((delta) => writer?.append(delta));
+    writer?.finish();
     const container = $('extract-checklist');
     if (container) {
       container.innerHTML = renderChecklistHtml(items);
     }
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to re-extract.');
   } finally {
     hideLoading();
@@ -1038,15 +1211,23 @@ async function handleTranslate(): Promise<void> {
   hideError();
   showLoading('Translating email...');
 
+  const writer = streamInto('translate-output');
+  writer?.onFirst(() => {
+    showElement('translate-result-section');
+    hideLoading();
+  });
+
   try {
-    const result = await translateEmail(langSelect.value);
+    const result = await translateEmail(langSelect.value, (delta) => writer?.append(delta));
+    writer?.finish();
     const container = $('translate-output');
     if (container) {
       container.innerHTML = renderTranslationHtml(result);
     }
-    showElement('translate-result-section');
     $('translate-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to translate.');
   } finally {
     hideLoading();
@@ -1060,13 +1241,22 @@ async function handleRegenerateTranslate(): Promise<void> {
   hideError();
   showLoading('Re-translating email...');
 
+  const writer = streamInto('translate-output');
+  writer?.onFirst(() => {
+    showElement('translate-result-section');
+    hideLoading();
+  });
+
   try {
-    const result = await regenerateTranslation(langSelect.value);
+    const result = await regenerateTranslation(langSelect.value, (delta) => writer?.append(delta));
+    writer?.finish();
     const container = $('translate-output');
     if (container) {
       container.innerHTML = renderTranslationHtml(result);
     }
   } catch (err: any) {
+    writer?.clear();
+    writer?.finish();
     showError(err.message || 'Failed to re-translate.');
   } finally {
     hideLoading();

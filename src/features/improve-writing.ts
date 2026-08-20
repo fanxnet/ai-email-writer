@@ -56,7 +56,10 @@ const FOCUS_LABELS: Record<ImprovementFocus, string> = {
  * Read the current text and generate an improved version.
  * Tries to read selected text first; falls back to the full body.
  */
-export async function improveWriting(options: ImproveOptions): Promise<{
+export async function improveWriting(
+  options: ImproveOptions,
+  onStream?: (delta: string) => void,
+): Promise<{
   original: string;
   improved: string;
 }> {
@@ -78,6 +81,7 @@ export async function improveWriting(options: ImproveOptions): Promise<{
   const result = await generateText(prompt, {
     temperature: 0.3,
     maxOutputTokens: 2048,
+    onStream,
   });
 
   originalText = text;
@@ -90,14 +94,14 @@ export async function improveWriting(options: ImproveOptions): Promise<{
 /**
  * Re-run the improvement with the same options.
  */
-export async function regenerateImprovement(): Promise<{
+export async function regenerateImprovement(onStream?: (delta: string) => void): Promise<{
   original: string;
   improved: string;
 }> {
   if (!lastOptions) {
     throw new Error('No previous improvement to regenerate.');
   }
-  return improveWriting(lastOptions);
+  return improveWriting(lastOptions, onStream);
 }
 
 /**

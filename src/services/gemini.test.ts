@@ -1,8 +1,9 @@
 /**
  * AI Compose — Gemini Service Unit Tests
  *
- * Tests the Gemini client service with mocked @google/genai SDK responses
- * to verify error handling, retry logic, and generation behavior.
+ * Tests the Gemini client service with mocked @google/genai SDK streams
+ * to verify error handling, retry logic, generation behavior, and
+ * streaming health monitoring.
  *
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
@@ -18,13 +19,13 @@ import {
 // Mock the @google/genai module
 // ---------------------------------------------------------------------------
 
-const mockGenerateContent = jest.fn();
+const mockGenerateContentStream = jest.fn();
 
 jest.mock('@google/genai', () => {
   return {
     GoogleGenAI: jest.fn().mockImplementation(() => ({
       models: {
-        generateContent: mockGenerateContent,
+        generateContentStream: mockGenerateContentStream,
       },
     })),
     Type: {
@@ -43,12 +44,42 @@ jest.mock('../features/settings', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Streaming mock helpers
+// ---------------------------------------------------------------------------
+
+/** Build an async iterable (as returned by generateContentStream) that yields
+ * `text` chunks, with an optional per-chunk delay (works with fake timers). */
+function streamOf(chunks: string[], perChunkDelayMs = 0): Promise<AsyncIterable<{ text?: string }>> {
+  return Promise.resolve(
+    (async function* () {
+      for (const chunk of chunks) {
+        if (perChunkDelayMs) {
+          await new Promise((resolve) => setTimeout(resolve, perChunkDelayMs));
+        }
+        yield { text: chunk };
+      }
+    })(),
+  );
+}
+
+/** An async iterable that never produces data (for connect/stall tests). */
+function hangingStream(yieldFirst = false): Promise<AsyncIterable<{ text?: string }>> {
+  return Promise.resolve(
+    (async function* () {
+      if (yieldFirst) {
+        yield { text: 'partial' };
+      }
+      await new Promise(() => {}); // hang forever
+    })(),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Test setup
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  mockGenerateContent.mockReset();
-  // Re-init client before each test
+  mockGenerateContentStream.mockReset();
   initGeminiClient('test-api-key-123');
 });
 
@@ -77,20 +108,34 @@ describe('initGeminiClient', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateText — success', () => {
-  it('should return generated text from a successful response', async () => {
-    mockGenerateContent.mockResolvedValueOnce({
-      text: 'Hello, this is a summary of your email.',
-    });
+  it('should return generated text from a successful stream', async () => {
+    mockGenerateContentStream.mockReturnValue(
+      streamOf(['Hello, this is a summary of your email.']),
+    );
 
     const result = await generateText('Summarize this email');
     expect(result).toBe('Hello, this is a summary of your email.');
-    expect(mockGenerateContent).toHaveBeenCalled();
+    expect(mockGenerateContentStream).toHaveBeenCalled();
+  });
+
+  it('should aggregate text across multiple stream chunks', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Hello, ', 'this is ', 'a summary.']));
+
+    const result = await generateText('Summarize this email');
+    expect(result).toBe('Hello, this is a summary.');
+  });
+
+  it('should deliver text deltas progressively via onStream', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Hello, ', 'world!']));
+
+    const deltas: string[] = [];
+    await generateText('Test prompt', { onStream: (d) => deltas.push(d) });
+
+    expect(deltas).toEqual(['Hello, ', 'world!']);
   });
 
   it('should pass custom generation options', async () => {
-    mockGenerateContent.mockResolvedValueOnce({
-      text: 'Generated response with custom params.',
-    });
+    mockGenerateContentStream.mockReturnValue(streamOf(['Generated response with custom params.']));
 
     const result = await generateText('Test prompt', {
       temperature: 0.5,
@@ -111,7 +156,7 @@ describe('generateText — error handling', () => {
   it('should throw INVALID_API_KEY for 401 errors', async () => {
     const error = new Error('API key not valid');
     (error as any).status = 401;
-    mockGenerateContent.mockRejectedValue(error);
+    mockGenerateContentStream.mockRejectedValue(error);
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.INVALID_API_KEY,
@@ -122,7 +167,7 @@ describe('generateText — error handling', () => {
   it('should throw INVALID_API_KEY for 403 errors', async () => {
     const error = new Error('Permission denied');
     (error as any).status = 403;
-    mockGenerateContent.mockRejectedValue(error);
+    mockGenerateContentStream.mockRejectedValue(error);
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.INVALID_API_KEY,
@@ -131,9 +176,7 @@ describe('generateText — error handling', () => {
   });
 
   it('should throw CONTENT_FILTERED for empty responses', async () => {
-    mockGenerateContent.mockResolvedValue({
-      text: '',
-    });
+    mockGenerateContentStream.mockReturnValue(streamOf(['']));
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.CONTENT_FILTERED,
@@ -141,9 +184,8 @@ describe('generateText — error handling', () => {
   });
 
   it('should throw NETWORK_ERROR for fetch failures', async () => {
-    mockGenerateContent.mockRejectedValue(new Error('fetch failed'));
+    mockGenerateContentStream.mockRejectedValue(new Error('fetch failed'));
 
-    // Use a longer timeout since retry backoff adds real delays
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.NETWORK_ERROR,
       retryable: true,
@@ -151,7 +193,9 @@ describe('generateText — error handling', () => {
   }, 30_000);
 
   it('should throw CONTENT_FILTERED for safety filter blocks', async () => {
-    mockGenerateContent.mockRejectedValue(new Error('Response blocked by safety filter'));
+    mockGenerateContentStream.mockRejectedValue(
+      new Error('Response blocked by safety filter'),
+    );
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.CONTENT_FILTERED,
@@ -169,58 +213,112 @@ describe('generateText — retry with backoff', () => {
     const rateLimitError = new Error('Too many requests');
     (rateLimitError as any).status = 429;
 
-    // First two calls reject, third succeeds
-    mockGenerateContent
+    mockGenerateContentStream
       .mockRejectedValueOnce(rateLimitError)
       .mockRejectedValueOnce(rateLimitError)
-      .mockResolvedValueOnce({
-        text: 'Success after retries!',
-      });
+      .mockImplementation(() => streamOf(['Success after retries!']));
 
     const result = await generateText('test');
     expect(result).toBe('Success after retries!');
-    expect(mockGenerateContent).toHaveBeenCalledTimes(3);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(3);
   }, 30_000);
 
   it('should retry server errors (5xx) and succeed', async () => {
     const serverError = new Error('Internal server error');
     (serverError as any).status = 500;
 
-    mockGenerateContent
+    mockGenerateContentStream
       .mockRejectedValueOnce(serverError)
-      .mockResolvedValueOnce({
-        text: 'Recovered from server error.',
-      });
+      .mockImplementation(() => streamOf(['Recovered from server error.']));
 
     const result = await generateText('test');
     expect(result).toBe('Recovered from server error.');
-    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
   }, 15_000);
 
   it('should not retry non-retryable errors', async () => {
     const authError = new Error('Invalid API key');
     (authError as any).status = 401;
 
-    mockGenerateContent.mockRejectedValue(authError);
+    mockGenerateContentStream.mockRejectedValue(authError);
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.INVALID_API_KEY,
     });
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
   });
 
   it('should throw after exhausting all retries', async () => {
     const rateLimitError = new Error('Too many requests');
     (rateLimitError as any).status = 429;
 
-    mockGenerateContent.mockRejectedValue(rateLimitError);
+    mockGenerateContentStream.mockRejectedValue(rateLimitError);
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.RATE_LIMITED,
     });
-    // 1 initial + 3 retries = 4 total
-    expect(mockGenerateContent).toHaveBeenCalledTimes(4);
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(4);
   }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
+// Streaming health monitoring (fake timers)
+// ---------------------------------------------------------------------------
+
+describe('streaming health monitoring', () => {
+  const CONNECT_MS = 30_000;
+  const STALL_MS = 60_000;
+  const OVERALL_MS = 300_000;
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('should throw TIMEOUT when no data arrives at all (connect window)', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockReturnValue(hangingStream());
+
+    const promise = generateText('test');
+    const matcher = expect(promise).rejects.toMatchObject({
+      code: GeminiErrorCode.TIMEOUT,
+      retryable: false,
+    });
+
+    await jest.advanceTimersByTimeAsync(CONNECT_MS + 500);
+    await matcher;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('should throw TIMEOUT when the stream stalls for the stall window', async () => {
+    jest.useFakeTimers();
+    mockGenerateContentStream.mockReturnValue(hangingStream(true));
+
+    const promise = generateText('test');
+    const matcher = expect(promise).rejects.toMatchObject({
+      code: GeminiErrorCode.TIMEOUT,
+      retryable: false,
+    });
+
+    await jest.advanceTimersByTimeAsync(STALL_MS + 500);
+    await matcher;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('should throw TIMEOUT when the response exceeds the overall ceiling', async () => {
+    jest.useFakeTimers();
+    // Trickle data slowly but indefinitely; only the overall ceiling stops it.
+    mockGenerateContentStream.mockReturnValue(streamOf(Array(100).fill('x'), 10_000));
+
+    const promise = generateText('test');
+    const matcher = expect(promise).rejects.toMatchObject({
+      code: GeminiErrorCode.TIMEOUT,
+      retryable: false,
+    });
+
+    await jest.advanceTimersByTimeAsync(OVERALL_MS + 20_000);
+    await matcher;
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -229,7 +327,6 @@ describe('generateText — retry with backoff', () => {
 
 describe('generateText — uninitialised client', () => {
   it('should throw if client was never initialised', async () => {
-    // Reset the module to clear the singleton
     jest.resetModules();
     const freshModule = await import('./gemini');
 

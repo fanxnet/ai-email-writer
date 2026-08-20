@@ -121,7 +121,10 @@ function buildAutoLanguageRule(): string {
 /**
  * Generate a reply to the current email.
  */
-export async function generateReply(options: DraftReplyOptions): Promise<string> {
+export async function generateReply(
+  options: DraftReplyOptions,
+  onStream?: (delta: string) => void,
+): Promise<string> {
   if (!options.instructions || !options.instructions.trim()) {
     throw new Error('Please enter your reply instructions.');
   }
@@ -189,6 +192,7 @@ export async function generateReply(options: DraftReplyOptions): Promise<string>
   const reply = await generateText(prompt, {
     temperature: 0.7,
     maxOutputTokens: 4096,
+    onStream,
   });
 
   lastReplyOptions = { ...options };
@@ -250,17 +254,20 @@ export function restoreFromHistory(key: string): { reply: string; options: Draft
 /**
  * Regenerate the last reply with the same inputs.
  */
-export async function regenerateReply(): Promise<string> {
+export async function regenerateReply(onStream?: (delta: string) => void): Promise<string> {
   if (!lastReplyOptions) {
     throw new Error('No previous reply to regenerate. Please generate a reply first.');
   }
-  return generateReply(lastReplyOptions);
+  return generateReply(lastReplyOptions, onStream);
 }
 
 /**
  * Refine the last generated reply with follow-up instructions.
  */
-export async function refineReply(refinement: string): Promise<string> {
+export async function refineReply(
+  refinement: string,
+  onStream?: (delta: string) => void,
+): Promise<string> {
   if (!lastReply) {
     throw new Error('No reply to refine. Please generate a reply first.');
   }
@@ -287,6 +294,7 @@ Requirements:
   const refined = await generateText(prompt, {
     temperature: 0.6,
     maxOutputTokens: 4096,
+    onStream,
   });
 
   // Record the refinement round so later turns can reference it

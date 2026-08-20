@@ -31,6 +31,8 @@ export interface GenerateOptions {
   model?: string;
   /** Override the adaptive request timeout (ms). */
   timeoutMs?: number;
+  /** Receive text deltas as the model streams (for progressive UI). */
+  onStream?: (delta: string) => void;
 }
 
 /** Options for structured JSON generation. */
@@ -47,6 +49,8 @@ export interface GenerateJsonOptions {
   responseSchema?: Record<string, unknown>;
   /** Override the adaptive request timeout (ms). */
   timeoutMs?: number;
+  /** Receive text deltas as the model streams (for progressive UI). */
+  onStream?: (delta: string) => void;
 }
 
 /** Error codes surfaced by the Gemini service. */
@@ -102,9 +106,12 @@ const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const RETRY_BACKOFF_FACTOR = 2;
 
-const BASE_TIMEOUT_MS = 30_000;
-const TIMEOUT_PER_5K_CHARS_MS = 10_000;
-const MAX_TIMEOUT_MS = 90_000;
+// Streaming health-monitoring tiers. All times are wall-clock and are not
+// affected by prompt size — a model that goes quiet is hanging regardless of
+// how long the input was.
+const CONNECT_TIMEOUT_MS = 30_000; // No first data at all (network/host issue).
+const STALL_TIMEOUT_MS = 60_000; // No new data after the stream started.
+const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
 
 // ---------------------------------------------------------------------------
 // Client singleton
@@ -161,12 +168,10 @@ export async function generateText(
   const client = getClient();
   const modelName = options.model ?? getSetting('defaultModel') ?? FALLBACK_MODEL;
 
-  const timeoutMs = calcTimeout(prompt.length, options.timeoutMs);
-
   const callFn = async (): Promise<string> => {
     try {
-      const response = await withTimeout(
-        client.models.generateContent({
+      const text = await collectModelStream(
+        client.models.generateContentStream({
           model: modelName,
           contents: prompt,
           config: {
@@ -176,10 +181,8 @@ export async function generateText(
             topK: options.topK ?? DEFAULT_TOP_K,
           },
         }),
-        timeoutMs,
+        options.onStream,
       );
-
-      const text = (response as { text?: string }).text;
 
       if (!text || text.trim().length === 0) {
         throw new GeminiError(
@@ -190,6 +193,7 @@ export async function generateText(
 
       return text;
     } catch (error) {
+      if (error instanceof GeminiError) throw error;
       throw classifyError(error);
     }
   };
@@ -216,12 +220,10 @@ export async function generateJson<T = Record<string, unknown>>(
   const client = getClient();
   const modelName = options.model ?? getSetting('defaultModel') ?? FALLBACK_MODEL;
 
-  const timeoutMs = calcTimeout(prompt.length, options.timeoutMs);
-
   const callFn = async (): Promise<T> => {
     try {
-      const response = await withTimeout(
-        client.models.generateContent({
+      const text = await collectModelStream(
+        client.models.generateContentStream({
           model: modelName,
           contents: prompt,
           config: {
@@ -236,10 +238,8 @@ export async function generateJson<T = Record<string, unknown>>(
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),
-        timeoutMs,
+        options.onStream,
       );
-
-      const text = (response as { text?: string }).text;
 
       if (!text || text.trim().length === 0) {
         throw new GeminiError(
@@ -275,35 +275,117 @@ export async function generateJson<T = Record<string, unknown>>(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Calculate adaptive timeout based on prompt length. */
-function calcTimeout(promptLength: number, overrideMs?: number): number {
-  if (overrideMs) return overrideMs;
-  const scaled = BASE_TIMEOUT_MS + Math.ceil(promptLength / 5000) * TIMEOUT_PER_5K_CHARS_MS;
-  return Math.min(scaled, MAX_TIMEOUT_MS);
+/**
+ * Consume a model content stream and return the full text.
+ *
+ * Applies health monitoring to the stream:
+ *  - Connect window: fails if no data arrives at all within `CONNECT_TIMEOUT_MS`.
+ *  - Stall window: fails if the stream goes quiet for `STALL_TIMEOUT_MS`.
+ *  - Overall ceiling: fails if the whole response exceeds `OVERALL_TIMEOUT_MS`.
+ *
+ * @param streamLike A promise (or value) resolving to an async iterable of
+ *                   chunks exposing `text`. Accepts both the raw async
+ *                   iterable and the SDK's stream result wrapper.
+ * @param onStream   Optional callback invoked with each text delta.
+ * @throws {GeminiError} with `code = TIMEOUT` (non-retryable) on health failures.
+ */
+async function collectModelStream(
+  streamLike:
+    | AsyncIterable<{ text?: string }>
+    | Promise<AsyncIterable<{ text?: string }>>
+    | Promise<{ stream: AsyncIterable<{ text?: string }> }>,
+  onStream?: (delta: string) => void,
+): Promise<string> {
+  const resolved = await Promise.resolve(streamLike);
+  const iterable: AsyncIterable<{ text?: string }> =
+    typeof (resolved as { stream?: AsyncIterable<{ text?: string }> }).stream === 'object'
+      ? (resolved as { stream: AsyncIterable<{ text?: string }> }).stream
+      : (resolved as AsyncIterable<{ text?: string }>);
+
+  let text = '';
+  let firstByte = false;
+  const startedAt = Date.now();
+
+  // Awaiting the stream promise counts as part of the connect window.
+  const iterator = iterable[Symbol.asyncIterator]();
+
+  while (true) {
+    const overallLeft = OVERALL_TIMEOUT_MS - (Date.now() - startedAt);
+    if (overallLeft <= 0) {
+      throw streamTimeoutError('overall');
+    }
+
+    const tierMs = firstByte ? STALL_TIMEOUT_MS : CONNECT_TIMEOUT_MS;
+    const waitMs = Math.min(tierMs, overallLeft);
+
+    let next: IteratorResult<{ text?: string }>;
+    try {
+      next = await raceWithTimeout(iterator.next(), waitMs, () =>
+        streamTimeoutError(firstByte ? 'stall' : 'connect'),
+      );
+    } catch (error) {
+      if (error instanceof GeminiError) throw error;
+      throw classifyError(error);
+    }
+
+    if (next.done) break;
+    firstByte = true;
+
+    const delta = next.value.text ?? '';
+    if (delta) {
+      text += delta;
+      onStream?.(delta);
+    }
+  }
+
+  return text;
 }
 
-/** Wrap a promise with a timeout. */
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+/** Build a typed timeout error for one of the health-monitoring tiers. */
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): GeminiError {
+  let message: string;
+  if (kind === 'connect') {
+    message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
+  } else if (kind === 'stall') {
+    message = `The model went quiet for ${STALL_TIMEOUT_MS / 1000}s with no new data — try again.`;
+  } else {
+    message = `The response did not finish within ${OVERALL_TIMEOUT_MS / 1000}s — try a shorter request.`;
+  }
+  // Not transient — retrying a hanging stream won't help.
+  return new GeminiError(message, GeminiErrorCode.TIMEOUT, false);
+}
+
+/** Race a promise against a timeout that fires `onTimeout` (an Error). */
+function raceWithTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  onTimeout: () => Error,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    let settled = false;
     const timer = setTimeout(() => {
-      reject(
-        new GeminiError(
-          `Request timed out after ${ms / 1000}s. The email may be too long — try a shorter selection.`,
-          GeminiErrorCode.TIMEOUT,
-          false, // Timeouts on large prompts are not transient — don't retry
-        ),
-      );
+      if (!settled) {
+        settled = true;
+        reject(onTimeout());
+      }
     }, ms);
 
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
+    promise.then(
+      (value) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        }
+      },
+      (error) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(error);
+        }
+      },
+    );
   });
 }
 
