@@ -87,7 +87,9 @@ const LONG_EMAIL_CHARS = 8000;
 
 const MAX_ENTRIES = 20;
 const STORE_USER_MAX_CHARS = 200;
-const STORE_ASSISTANT_MAX_CHARS = 1000;
+// Assistant replies are kept in full (up to ~4k tokens of text) so the reply
+// can be restored/refined/displayed without losing the tail of long drafts.
+const STORE_ASSISTANT_MAX_CHARS = 16000;
 const INJECT_USER_MAX_CHARS = 100;
 const INJECT_ASSISTANT_MAX_CHARS = 800;
 const EMAIL_REF_SUBJECT_CHARS = 60;

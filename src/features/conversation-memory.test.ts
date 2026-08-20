@@ -107,13 +107,22 @@ describe('appendTurn', () => {
     expect(rec.entries[1].content).toBe('New reply');
   });
 
-  it('caps the stored length of user and assistant content', () => {
+  it('caps the stored length of user content and keeps longer assistant replies', () => {
     appendTurn('k3', 'user', 'x'.repeat(300));
     appendTurn('k3', 'assistant', 'y'.repeat(1200));
 
     const rec = getConversation('k3');
     expect(rec.entries[0].content).toHaveLength(200);
-    expect(rec.entries[1].content).toHaveLength(1000);
+    // Assistant replies are retained in full (no 1000-char truncation) so
+    // long drafts survive re-entry / refinement unchanged.
+    expect(rec.entries[1].content).toHaveLength(1200);
+  });
+
+  it('still caps assistant content at the storage ceiling', () => {
+    appendTurn('k4', 'assistant', 'z'.repeat(20000));
+
+    const rec = getConversation('k4');
+    expect(rec.entries[0].content).toHaveLength(16000);
   });
 });
 
