@@ -116,7 +116,11 @@ function providerDisplayName(): string {
   return getSetting('aiProvider') === 'deepseek' ? 'DeepSeek' : 'Gemini';
 }
 
-function showLoading(message?: string, inputLength?: number): void {
+let loadingTimer: number | undefined;
+
+let loadingElapsed = 0;
+
+function showLoading(message?: string, _inputLength?: number): void {
   const overlay = $('loading-overlay');
   if (!overlay) return;
   const text = overlay.querySelector('.aic-loading__text') as HTMLElement;
@@ -124,13 +128,14 @@ function showLoading(message?: string, inputLength?: number): void {
 
   const estimate = overlay.querySelector('.aic-loading__estimate') as HTMLElement;
   if (estimate) {
-    if (inputLength && inputLength > 0) {
-      const seconds = Math.min(30, Math.round(8 + inputLength / 100));
-      estimate.textContent = `Estimated time: ~${seconds}s`;
-      estimate.classList.remove('hidden');
-    } else {
-      estimate.classList.add('hidden');
-    }
+    if (loadingTimer !== undefined) window.clearInterval(loadingTimer);
+    loadingElapsed = 0;
+    estimate.textContent = 'Elapsed: 0s';
+    estimate.classList.remove('hidden');
+    loadingTimer = window.setInterval(() => {
+      loadingElapsed += 1;
+      estimate.textContent = `Elapsed: ${loadingElapsed}s`;
+    }, 1000);
   }
 
   overlay.classList.remove('aic-loading--fade-out');
@@ -138,6 +143,10 @@ function showLoading(message?: string, inputLength?: number): void {
 }
 
 function hideLoading(): void {
+  if (loadingTimer !== undefined) {
+    window.clearInterval(loadingTimer);
+    loadingTimer = undefined;
+  }
   const overlay = $('loading-overlay');
   if (!overlay || overlay.classList.contains('hidden')) return;
 
