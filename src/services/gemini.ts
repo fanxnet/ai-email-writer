@@ -33,6 +33,8 @@ export interface GenerateOptions {
   timeoutMs?: number;
   /** Receive text deltas as the model streams (for progressive UI). */
   onStream?: (delta: string) => void;
+  /** Number of automatic retries for transient failures. Default: 3. */
+  maxRetries?: number;
 }
 
 /** Options for structured JSON generation. */
@@ -51,6 +53,8 @@ export interface GenerateJsonOptions {
   timeoutMs?: number;
   /** Receive text deltas as the model streams (for progressive UI). */
   onStream?: (delta: string) => void;
+  /** Number of automatic retries for transient failures. Default: 3. */
+  maxRetries?: number;
 }
 
 /** Error codes surfaced by the Gemini service. */
@@ -198,7 +202,7 @@ export async function generateText(
     }
   };
 
-  return retryWithBackoff(callFn);
+  return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
 }
 
 /**
@@ -268,7 +272,7 @@ export async function generateJson<T = Record<string, unknown>>(
     }
   };
 
-  return retryWithBackoff(callFn);
+  return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,17 +397,17 @@ function raceWithTimeout<T>(
  * Retry a function with exponential backoff.
  * Only retries errors marked as `retryable`.
  */
-async function retryWithBackoff<T>(fn: () => Promise<T>): Promise<T> {
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries: number = MAX_RETRIES): Promise<T> {
   let lastError: GeminiError | undefined;
   let delay = INITIAL_RETRY_DELAY_MS;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof GeminiError ? error : classifyError(error);
 
-      if (!lastError.retryable || attempt === MAX_RETRIES) {
+      if (!lastError.retryable || attempt === maxRetries) {
         throw lastError;
       }
 
@@ -441,7 +445,7 @@ function classifyError(error: unknown): GeminiError {
   // Rate limited
   if (statusCode === 429 || /rate.?limit/i.test(message) || /too many requests/i.test(message)) {
     return new GeminiError(
-      'Rate limited by the Gemini API. Retrying with backoff…',
+      'Gemini API rate limit reached. Please wait a moment and try again.',
       GeminiErrorCode.RATE_LIMITED,
       true,
       429,

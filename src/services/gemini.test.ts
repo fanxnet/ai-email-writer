@@ -259,6 +259,18 @@ describe('generateText — retry with backoff', () => {
     });
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(4);
   }, 60_000);
+
+  it('should not retry at all when maxRetries is 0', async () => {
+    const rateLimitError = new Error('Too many requests');
+    (rateLimitError as any).status = 429;
+
+    mockGenerateContentStream.mockRejectedValue(rateLimitError);
+
+    await expect(generateText('test', { maxRetries: 0 })).rejects.toMatchObject({
+      code: GeminiErrorCode.RATE_LIMITED,
+    });
+    expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

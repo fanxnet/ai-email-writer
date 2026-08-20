@@ -8,16 +8,21 @@ import { getSetting } from '../features/settings';
 
 export async function generateText(prompt: string, options: any = {}): Promise<string> {
   const provider = getSetting('aiProvider') || 'gemini';
+  // Default to a single attempt so retries never burn API tokens unbeknown to
+  // the user; callers can opt back in explicitly via `maxRetries`.
+  const opts = { ...options, maxRetries: options.maxRetries ?? 0 };
   if (provider === 'deepseek') {
-    return deepseekGenerateText(prompt, options);
+    return deepseekGenerateText(prompt, opts);
   }
-  return geminiGenerateText(prompt, options);
+  return geminiGenerateText(prompt, opts);
 }
 
 export async function generateJson<T>(prompt: string, options: any = {}): Promise<T> {
   const provider = getSetting('aiProvider') || 'gemini';
+  // See generateText(): single attempt by default.
+  const opts = { ...options, maxRetries: options.maxRetries ?? 0 };
   if (provider === 'deepseek') {
-    return deepseekGenerateJson<T>(prompt, options);
+    return deepseekGenerateJson<T>(prompt, opts);
   }
-  return geminiGenerateJson<T>(prompt, options);
+  return geminiGenerateJson<T>(prompt, opts);
 }

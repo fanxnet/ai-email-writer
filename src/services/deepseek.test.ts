@@ -234,6 +234,19 @@ describe('retryWithBackoff', () => {
     await expect(promise).resolves.toBe('recovered');
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
+
+  it('does not retry at all when maxRetries is 0', async () => {
+    mockFetch.mockResolvedValue(sseResponse([], false, 429, 'slow down'));
+
+    const promise = generateText('Say hi', { model: 'deepseek-chat', maxRetries: 0 });
+    const matcher = expect(promise).rejects.toMatchObject({
+      code: DeepSeekErrorCode.RATE_LIMITED,
+    });
+
+    await jest.advanceTimersByTimeAsync(100_000);
+    await matcher;
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

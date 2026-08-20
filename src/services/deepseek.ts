@@ -311,7 +311,7 @@ function classifyHttpError(status: number, body: string): DeepSeekError {
   }
   if (status === 429) {
     return new DeepSeekError(
-      'Rate limited by the DeepSeek API. Retrying with backoff…',
+      'DeepSeek API rate limit reached. Please wait a moment and try again.',
       DeepSeekErrorCode.RATE_LIMITED,
       true,
       status,
@@ -339,17 +339,17 @@ function classifyError(error: unknown): DeepSeekError {
  * `retryable` (transient server / rate-limit / network failures) — never
  * empty responses, invalid keys, timeouts, or malformed payloads.
  */
-async function retryWithBackoff<T>(fn: () => Promise<T>): Promise<T> {
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries: number = MAX_RETRIES): Promise<T> {
   let lastError: DeepSeekError | undefined;
   let delay = INITIAL_RETRY_DELAY_MS;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = classifyError(error);
 
-      if (!lastError.retryable || attempt === MAX_RETRIES) {
+      if (!lastError.retryable || attempt === maxRetries) {
         throw lastError;
       }
 
@@ -396,7 +396,7 @@ export async function generateText(
     return text;
   };
 
-  return retryWithBackoff(callFn);
+  return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
 }
 
 export async function generateJson<T = Record<string, unknown>>(
@@ -446,5 +446,5 @@ export async function generateJson<T = Record<string, unknown>>(
     }
   };
 
-  return retryWithBackoff(callFn);
+  return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
 }
