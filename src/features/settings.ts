@@ -227,9 +227,9 @@ export function resetSettings(): void {
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
   noPlaceholders:
-    '请使用真实公司,姓名(勿使用占位符).',
+    'Do not add a sign-off or signature (e.g. "Regards", "Sincerely") — the email client will add the signature automatically',
   noSignature:
-    '服务行业,和气生财,合作双赢.',
+    '服务行业要和气生财,合作双赢.',
   noSubjectLine:
     "Do not include a subject line in the output",
   keepShort:
