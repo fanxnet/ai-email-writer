@@ -60,8 +60,7 @@ function makeSettings(overrides: Partial<AIComposeSettings> = {}): AIComposeSett
     defaultSummaryStyle: 'bullets',
     defaultLanguage: 'English',
     replyLanguage: 'auto',
-    translateLanguage: '',
-    summaryLanguage: 'auto',
+    draftLanguage: 'English',
     presetRules: {
       noPlaceholders: true,
       noSignature: true,
@@ -114,19 +113,19 @@ describe('saveSettings / loadSettings', () => {
     expect(s2.replyLanguage).toBe('Chinese (Simplified)');
   });
 
-  test('translateLanguage defaults to unset and persists a round-trip', () => {
+  test('draftLanguage defaults to English and persists a round-trip', () => {
     const s1 = loadSettings();
-    expect(s1.translateLanguage).toBe('');
+    expect(s1.draftLanguage).toBe('English');
 
-    saveSettings(makeSettings({ translateLanguage: 'Japanese' }));
+    saveSettings(makeSettings({ draftLanguage: 'Japanese' }));
     const s2 = loadSettings();
-    expect(s2.translateLanguage).toBe('Japanese');
+    expect(s2.draftLanguage).toBe('Japanese');
   });
 
   test('legacy stored settings without the new fields fall back to defaults', () => {
     const legacy = makeSettings({ defaultTone: 'friendly' }) as unknown as Record<string, unknown>;
     delete legacy.replyLanguage;
-    delete legacy.translateLanguage;
+    delete legacy.draftLanguage;
     (global as unknown as { localStorage: Storage }).localStorage.setItem(
       'ai_compose_settings',
       JSON.stringify(legacy),
@@ -138,7 +137,7 @@ describe('saveSettings / loadSettings', () => {
       const fresh = require('./settings') as typeof import('./settings');
       const loaded = fresh.loadSettings();
       expect(loaded.replyLanguage).toBe('auto');
-      expect(loaded.translateLanguage).toBe('');
+      expect(loaded.draftLanguage).toBe('English');
       expect(loaded.defaultTone).toBe('friendly');
     });
   });

@@ -46,15 +46,15 @@ Requirements:
  *               {{REPLY_TO_NAME}}, {{RULES}}
  */
 export const REPLY_PROMPT = `Role:As a professional email assistant;{{PROFILE}}
-目标:{{GOAL}}
+{{GOAL}}
 Requirements:
 - Tone: {{TONE}}
-- 语言：{{LANGUAGE}}
+- Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
 - Address the reply to: {{REPLY_TO_NAME}} 
 - Write only the reply body (no subject)
 - Reference relevant points from the original email naturally
 - Keep the reply focused and professional,no commentary outside the reply
-以下是您要回复的原始邮件:
+Here is the original email you are replying to:
 ---
 {{ORIGINAL_EMAIL}}
 ---

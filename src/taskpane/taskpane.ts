@@ -1395,13 +1395,17 @@ Office.onReady((info) => {
       const replyLang = $('reply-language') as HTMLSelectElement | null;
       if (replyLang) replyLang.value = s.replyLanguage || 'auto';
 
-      // Translation language (persisted, falls back to default language)
-      const langSelect = $('translate-language') as HTMLSelectElement | null;
-      if (langSelect) langSelect.value = s.translateLanguage || s.defaultLanguage;
+      // Draft language (persisted; defaults to 'English')
+      const draftLang = $('draft-language') as HTMLSelectElement | null;
+      if (draftLang) draftLang.value = s.draftLanguage || 'English';
 
-      // Summary language (persisted; 'auto' = match original email by default)
+      // Translation language (shared with Summarize via defaultLanguage)
+      const langSelect = $('translate-language') as HTMLSelectElement | null;
+      if (langSelect) langSelect.value = s.defaultLanguage || 'English';
+
+      // Summary language (shared with Translate via defaultLanguage)
       const summaryLang = $('summary-language') as HTMLSelectElement | null;
-      if (summaryLang) summaryLang.value = s.summaryLanguage || 'auto';
+      if (summaryLang) summaryLang.value = s.defaultLanguage || 'English';
 
       // Settings form itself
       const sProvider = $('settings-provider') as HTMLSelectElement | null;
@@ -1445,17 +1449,22 @@ Office.onReady((info) => {
     window.addEventListener('pagehide', autoSaveSession);
     window.addEventListener('beforeunload', autoSaveSession);
 
-    // Persist the user's Reply / Translate language choices immediately so
+    // Persist the user's language choices immediately so
     // they survive reloads and become the default on the next use.
     const persistReplyLanguage = (): void => {
       const sel = $('reply-language') as HTMLSelectElement | null;
       if (!sel) return;
       saveSettings({ ...loadSettings(), replyLanguage: sel.value || 'auto' });
     };
+    const persistDraftLanguage = (): void => {
+      const sel = $('draft-language') as HTMLSelectElement | null;
+      if (!sel) return;
+      saveSettings({ ...loadSettings(), draftLanguage: sel.value || 'English' });
+    };
     const persistTranslateLanguage = (): void => {
       const sel = $('translate-language') as HTMLSelectElement | null;
       if (!sel) return;
-      saveSettings({ ...loadSettings(), translateLanguage: sel.value });
+      saveSettings({ ...loadSettings(), defaultLanguage: sel.value || 'English' });
     };
     const persistReplyReasoning = (): void => {
       const sel = $('reply-reasoning') as HTMLSelectElement | null;
@@ -1463,14 +1472,15 @@ Office.onReady((info) => {
       saveSettings({ ...loadSettings(), reasoningMode: sel.value as AIComposeSettings['reasoningMode'] });
     };
     $('reply-language')?.addEventListener('change', persistReplyLanguage);
+    $('draft-language')?.addEventListener('change', persistDraftLanguage);
     $('translate-language')?.addEventListener('change', persistTranslateLanguage);
     $('reply-reasoning')?.addEventListener('change', persistReplyReasoning);
 
-    // Summary language persistence
+    // Summary language persistence (writes to shared defaultLanguage)
     const persistSummaryLanguage = (): void => {
       const sel = $('summary-language') as HTMLSelectElement | null;
       if (!sel) return;
-      saveSettings({ ...loadSettings(), summaryLanguage: sel.value || 'auto' });
+      saveSettings({ ...loadSettings(), defaultLanguage: sel.value || 'English' });
     };
     $('summary-language')?.addEventListener('change', persistSummaryLanguage);
 
@@ -1800,7 +1810,6 @@ Office.onReady((info) => {
       const model = ($('settings-model') as HTMLSelectElement)?.value || (provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-flash-latest');
       const tone = ($('settings-tone') as HTMLSelectElement)?.value || 'professional';
       const summaryStyle = ($('settings-summary-style') as HTMLSelectElement)?.value || 'bullets';
-      const language = ($('settings-language') as HTMLSelectElement)?.value || 'English';
 
       // Validate API key format
       const keyError = $('api-key-error');
@@ -1825,7 +1834,6 @@ Office.onReady((info) => {
         defaultModel: model,
         defaultTone: tone as any,
         defaultSummaryStyle: summaryStyle as any,
-        defaultLanguage: language,
         activeCareerId: ($('career-active') as HTMLSelectElement)?.value || '',
       };
 
