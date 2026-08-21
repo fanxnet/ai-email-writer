@@ -229,7 +229,7 @@ const PRESET_RULE_LABELS: Record<string, string> = {
   noPlaceholders:
     '请使用真实公司,姓名(勿使用占位符).',
   noSignature:
-    '请勿添加结束语或签名.',
+    '服务行业,和气生财,合作双赢.',
   noSubjectLine:
     "Do not include a subject line in the output",
   keepShort:
