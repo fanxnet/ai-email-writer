@@ -598,8 +598,9 @@ async function handleGenerate(): Promise<void> {
   const goalText = buildGoalText(goal, customGoal);
 
   const options: DraftEmailOptions = {
-    instructions: instructions + goalText,
+    instructions,
     tone, length, language,
+    goalText,
   };
 
   hideError();
@@ -744,8 +745,9 @@ async function handleGenerateReply(): Promise<void> {
   const goalText = buildGoalText(goal, customGoal);
 
   const options: DraftReplyOptions = {
-    instructions: instructions + goalText,
+    instructions,
     tone, includeOriginal, language, reasoningMode,
+    goalText,
   };
 
   hideError();

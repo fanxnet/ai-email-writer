@@ -15,10 +15,12 @@
 /**
  * Compose a new email from bullet points or brief instructions.
  *
- * Placeholders: {{INSTRUCTIONS}}, {{TONE}}, {{LANGUAGE}}
+ * Placeholders: {{PROFILE}}, {{GOAL}}, {{INSTRUCTIONS}}, {{TONE}},
+ *               {{LANGUAGE}}, {{RULES}}
  */
 export const DRAFT_EMAIL_PROMPT = `You are a professional email assistant.
-
+{{PROFILE}}
+{{GOAL}}
 Draft a complete email based on the following instructions:
 
 {{INSTRUCTIONS}}
@@ -29,7 +31,8 @@ Requirements:
 - Include a subject line on the first line prefixed with "Subject: "
 - Use an appropriate greeting
 - Keep the email concise and to the point
-- Do not add any commentary outside the email itself`;
+- Do not add any commentary outside the email itself
+{{RULES}}`;
 
 // ---------------------------------------------------------------------------
 // Reply
@@ -38,20 +41,13 @@ Requirements:
 /**
  * Generate a reply to an existing email.
  *
- * Placeholders: {{ORIGINAL_EMAIL}}, {{REPLY_INSTRUCTIONS}}, {{TONE}},
- *               {{LANGUAGE}}, {{LANGUAGE_RULE}}
+ * Placeholders: {{PROFILE}}, {{GOAL}}, {{ORIGINAL_EMAIL}},
+ *               {{REPLY_INSTRUCTIONS}}, {{TONE}}, {{LANGUAGE}},
+ *               {{LANGUAGE_RULE}}, {{REPLY_TO_NAME}}, {{RULES}}
  */
 export const REPLY_PROMPT = `You are a professional email assistant.
-
-Here is the original email you are replying to:
-
----
-{{ORIGINAL_EMAIL}}
----
-
-Reply instructions: {{REPLY_INSTRUCTIONS}}
-
-{{LANGUAGE_RULE}}
+{{PROFILE}}
+{{GOAL}}
 Requirements:
 - Tone: {{TONE}}
 - Language: {{LANGUAGE}}
@@ -59,7 +55,16 @@ Requirements:
 - Write only the reply body (no subject line needed)
 - Reference relevant points from the original email naturally
 - Keep the reply focused and professional
-- Do not add any commentary outside the reply itself`;
+- Do not add any commentary outside the reply itself
+{{LANGUAGE_RULE}}
+Here is the original email you are replying to:
+
+---
+{{ORIGINAL_EMAIL}}
+---
+
+Reply instructions: {{REPLY_INSTRUCTIONS}}
+{{RULES}}`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread

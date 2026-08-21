@@ -17,7 +17,7 @@ import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { detectEmailLanguage } from '../prompts/language-detection';
 import { REPLY_PROMPT } from '../prompts/templates';
-import { getSetting, ReasoningMode } from './settings';
+import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import {
   getCurrentEmailBody,
   getCurrentEmailSubject,
@@ -48,6 +48,7 @@ export interface DraftReplyOptions {
   includeOriginal: boolean;
   language?: string;
   reasoningMode?: ReasoningMode;
+  goalText?: string;
 }
 
 export interface EmailContext {
@@ -181,14 +182,22 @@ export async function generateReply(
     ? buildReplyContextText(buildReplyContext(sessionKey))
     : '';
 
+  // Build Goal, Profile, and Rules as separate prompt sections
+  const goalText = options.goalText || '';
+  const profileText = buildProfileText();
+  const rulesText = buildRulesText();
+
   const prompt = buildPrompt(REPLY_PROMPT, {
+    PROFILE: profileText,
+    GOAL: goalText,
     ORIGINAL_EMAIL: emailBlock,
     REPLY_INSTRUCTIONS: `${memoryText}Current request: ${options.instructions}`,
     TONE: options.tone || 'professional',
     LANGUAGE: language,
     LANGUAGE_RULE: languageRule,
     REPLY_TO_NAME: context.sender.name || context.sender.email || 'the sender',
-  }, true);
+    RULES: rulesText,
+  });
 
   const reply = await generateText(prompt, {
     temperature: 0.7,

@@ -16,6 +16,7 @@ import { generateText } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { DRAFT_EMAIL_PROMPT } from '../prompts/templates';
 import { getItemMode } from '../services/outlook';
+import { buildGoalText, buildRulesText, buildProfileText } from './settings';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +27,7 @@ export interface DraftEmailOptions {
   tone: string;
   length: string;
   language?: string;
+  goalText?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,12 +56,20 @@ export async function generateDraft(
   // Map length preference to a prompt hint
   const lengthHint = getLengthHint(options.length);
 
+  // Build Goal, Profile, and Rules as separate prompt sections
+  const goalText = options.goalText || '';
+  const profileText = buildProfileText();
+  const rulesText = buildRulesText();
+
   // Build the prompt from the template
   const prompt = buildPrompt(DRAFT_EMAIL_PROMPT, {
+    PROFILE: profileText,
+    GOAL: goalText,
     INSTRUCTIONS: `${options.instructions}\n\nDesired length: ${lengthHint}`,
     TONE: options.tone || 'professional',
     LANGUAGE: options.language || 'English',
-  }, true);
+    RULES: rulesText,
+  });
 
   // Call Gemini
   const draft = await generateText(prompt, {
