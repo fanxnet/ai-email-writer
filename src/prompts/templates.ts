@@ -43,27 +43,22 @@ Requirements:
  *
  * Placeholders: {{PROFILE}}, {{GOAL}}, {{ORIGINAL_EMAIL}},
  *               {{REPLY_INSTRUCTIONS}}, {{TONE}}, {{LANGUAGE}},
- *               {{LANGUAGE_RULE}}, {{REPLY_TO_NAME}}, {{RULES}}
+ *               {{REPLY_TO_NAME}}, {{RULES}}
  */
-export const REPLY_PROMPT = `You are a professional email assistant.
-{{PROFILE}}
-{{GOAL}}
+export const REPLY_PROMPT = `Role:As a professional email assistant;{{PROFILE}}
+目标:{{GOAL}}
 Requirements:
 - Tone: {{TONE}}
-- Language: {{LANGUAGE}}
-- Address the reply to: {{REPLY_TO_NAME}} (this is the person you are replying to, NOT the person the original email was addressed to)
+- 语言优先级：回复说明中指定的回复语言>{{LANGUAGE}}
+- Address the reply to: {{REPLY_TO_NAME}} (the sender of the original email )
 - Write only the reply body (no subject line needed)
 - Reference relevant points from the original email naturally
-- Keep the reply focused and professional
-- Do not add any commentary outside the reply itself
-{{LANGUAGE_RULE}}
-Here is the original email you are replying to:
-
+- Keep the reply focused and professional,don't add any commentary outside the reply itself
+以下是您要回复的原始邮件:
 ---
 {{ORIGINAL_EMAIL}}
 ---
-
-Reply instructions: {{REPLY_INSTRUCTIONS}}
+回复说明: {{REPLY_INSTRUCTIONS}}
 {{RULES}}`;
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,6 @@
 
 import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
-import { detectEmailLanguage } from '../prompts/language-detection';
 import { SUMMARIZE_THREAD_PROMPT } from '../prompts/templates';
 import {
   getCurrentEmailBody,
@@ -32,6 +31,7 @@ export type SummaryLength = 'brief' | 'standard' | 'detailed';
 export interface SummarizeOptions {
   style: SummaryStyle;
   length: SummaryLength;
+  language?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,10 +85,9 @@ export async function summarizeThread(
   // Build length + style instructions
   const lengthAndStyle = buildLengthStyleHint(options.length, options.style);
 
-  // Summaries match the thread's language deterministically when detectable
-  const detected = detectEmailLanguage(emailThread);
-  const summarizeLanguage = detected
-    ? `Summarize in ${detected}.`
+  // Use the user-selected language from the dropdown
+  const summarizeLanguage = options.language && options.language !== 'auto'
+    ? `Summarize in ${options.language}.`
     : 'Summarize in the same language as the email thread.';
 
   const prompt = buildPrompt(SUMMARIZE_THREAD_PROMPT, {

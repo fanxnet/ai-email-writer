@@ -969,8 +969,9 @@ function getSelectedStyle(): SummaryStyle {
 async function handleSummarize(): Promise<void> {
   const style = getSelectedStyle();
   const length = ($('summary-length') as HTMLSelectElement)?.value as SummaryLength || 'standard';
+  const language = ($('summary-language') as HTMLSelectElement)?.value || 'auto';
 
-  const options: SummarizeOptions = { style, length };
+  const options: SummarizeOptions = { style, length, language };
 
   hideError();
   showLoading(`Summarizing with ${providerDisplayName()}...`);
@@ -1398,6 +1399,10 @@ Office.onReady((info) => {
       const langSelect = $('translate-language') as HTMLSelectElement | null;
       if (langSelect) langSelect.value = s.translateLanguage || s.defaultLanguage;
 
+      // Summary language (persisted; 'auto' = match original email by default)
+      const summaryLang = $('summary-language') as HTMLSelectElement | null;
+      if (summaryLang) summaryLang.value = s.summaryLanguage || 'auto';
+
       // Settings form itself
       const sProvider = $('settings-provider') as HTMLSelectElement | null;
       if (sProvider) sProvider.value = s.aiProvider;
@@ -1460,6 +1465,14 @@ Office.onReady((info) => {
     $('reply-language')?.addEventListener('change', persistReplyLanguage);
     $('translate-language')?.addEventListener('change', persistTranslateLanguage);
     $('reply-reasoning')?.addEventListener('change', persistReplyReasoning);
+
+    // Summary language persistence
+    const persistSummaryLanguage = (): void => {
+      const sel = $('summary-language') as HTMLSelectElement | null;
+      if (!sel) return;
+      saveSettings({ ...loadSettings(), summaryLanguage: sel.value || 'auto' });
+    };
+    $('summary-language')?.addEventListener('change', persistSummaryLanguage);
 
     // --- Outlook theme detection (light/dark) ---
     try {

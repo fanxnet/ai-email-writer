@@ -217,59 +217,21 @@ describe('generateReply language resolution', () => {
     language: 'auto',
   });
 
-  it('auto + English email → pins the concrete detected language and injects the rule', async () => {
+  it('auto mode → uses language priority instruction', async () => {
     mockGenerateText.mockResolvedValue('Reply body');
 
     await generateReply(options());
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('- Language: English');
-    expect(prompt).toContain('IMPORTANT — Language rule:');
-    expect(prompt).toContain('explicitly and deliberately request');
+    expect(prompt).toContain('Language priority: Reply instructions language > auto');
   });
 
-  it('auto + Chinese email → pins Chinese and injects the rule', async () => {
-    mockGetBody.mockResolvedValue(CHINESE_EMAIL);
-    mockGenerateText.mockResolvedValue('回复正文');
-
-    await generateReply(options());
-
-    const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('- Language: Chinese');
-    expect(prompt).toContain('IMPORTANT — Language rule:');
-  });
-
-  it('auto + ambiguous email → falls back and still injects the rule', async () => {
-    mockGetBody.mockResolvedValue('See attached.');
-    mockGenerateText.mockResolvedValue('Reply body');
-
-    await generateReply(options());
-
-    const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).not.toContain('- Language: English');
-    expect(prompt).toContain('the same language as the original email');
-    expect(prompt).toContain('IMPORTANT — Language rule:');
-  });
-
-  it('explicit language selection → used verbatim and no rule injected', async () => {
+  it('explicit language selection → used verbatim in priority', async () => {
     mockGenerateText.mockResolvedValue('保留原文案的回复');
 
     await generateReply({ ...options(), language: 'Chinese (Simplified)' });
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('- Language: Chinese (Simplified)');
-    expect(prompt).not.toContain('IMPORTANT — Language rule:');
-  });
-
-  it('auto + English email + Chinese instructions → rule lets an explicit instruction language win', async () => {
-    mockGenerateText.mockResolvedValue('回复内容');
-
-    await generateReply({ ...options(), instructions: '请用中文回复对方，婉拒本次邀请' });
-
-    const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('请用中文回复对方');
-    expect(prompt).toContain('- Language: English'); // detected from the email
-    expect(prompt).toContain('IMPORTANT — Language rule:');
-    expect(prompt).toContain('follow that explicit request instead'); // exception clause
+    expect(prompt).toContain('Language priority: Reply instructions language > Chinese (Simplified)');
   });
 });

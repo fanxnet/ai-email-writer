@@ -15,7 +15,6 @@
 
 import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
-import { detectEmailLanguage } from '../prompts/language-detection';
 import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import {
@@ -107,20 +106,6 @@ export function clearEmailContext(): void {
 }
 
 /**
- * Hardened language instruction for the "auto" (match original email)
- * mode. It pins the reply language to the original email's language so
- * instructions written in another language cannot silently change the
- * output, while still honouring an EXPLICIT language request inside the
- * instructions (the exception the user relies on).
- */
-function buildAutoLanguageRule(): string {
-  return `IMPORTANT — Language rule:
-- Reply in the original email's language.
-- Do not switch to another language merely because the reply instructions above are written in that language.
-- Exception: if the instructions explicitly and deliberately request a specific reply language (e.g. "reply in Spanish" or "用中文回复"), follow that explicit request instead.`;
-}
-
-/**
  * Generate a reply to the current email.
  */
 export async function generateReply(
@@ -140,29 +125,8 @@ export async function generateReply(
   originalEmail += context.body;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
-  // Resolve language:
-  //  - explicit selection → used verbatim; NO language rule is injected so
-  //    the user's explicit choice is never overridden.
-  //  - 'auto' → deterministically match the original email's language when
-  //    detectable, otherwise let the model infer it. A hardened rule keeps
-  //    instructions written in another language from silently changing the
-  //    reply language — unless they explicitly request a language.
-  const auto = !options.language || options.language === 'auto';
-  const detected = auto ? detectEmailLanguage(context.body) : null;
-
-  let language: string;
-  let languageRule: string;
-
-  if (!auto) {
-    language = options.language as string;
-    languageRule = '';
-  } else if (detected) {
-    language = detected;
-    languageRule = buildAutoLanguageRule();
-  } else {
-    language = 'the same language as the original email';
-    languageRule = buildAutoLanguageRule();
-  }
+  // Resolve language: use the dropdown value, or 'auto' by default
+  const language = options.language || 'auto';
 
   // Conversation context is optional; when disabled the reply is generated
   // from the current email only and nothing is recorded.
@@ -194,7 +158,6 @@ export async function generateReply(
     REPLY_INSTRUCTIONS: `${memoryText}Current request: ${options.instructions}`,
     TONE: options.tone || 'professional',
     LANGUAGE: language,
-    LANGUAGE_RULE: languageRule,
     REPLY_TO_NAME: context.sender.name || context.sender.email || 'the sender',
     RULES: rulesText,
   });

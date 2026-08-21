@@ -61,6 +61,7 @@ function makeSettings(overrides: Partial<AIComposeSettings> = {}): AIComposeSett
     defaultLanguage: 'English',
     replyLanguage: 'auto',
     translateLanguage: '',
+    summaryLanguage: 'auto',
     presetRules: {
       noPlaceholders: true,
       noSignature: true,

@@ -56,6 +56,11 @@ export interface AIComposeSettings {
    * the Translate dropdown this value is stored and reused.
    */
   translateLanguage: string;
+  /**
+   * Persisted Summary-language dropdown value.
+   * 'auto' = match the original email's language (the system default).
+   */
+  summaryLanguage: string;
   /** Preset rules toggled on/off by the user. */
   presetRules: Record<string, boolean>;
   /** Free-text custom rules supplied by the user. */
@@ -87,6 +92,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   defaultLanguage: "English",
   replyLanguage: "auto",
   translateLanguage: "",
+  summaryLanguage: "auto",
   presetRules: {
     noPlaceholders: true,
     noSignature: true,
@@ -221,9 +227,9 @@ export function resetSettings(): void {
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
   noPlaceholders:
-    'Do not include placeholder tokens like [Your Name], [Company], or [Recipient]. Use real names from context or omit the sign-off entirely instead of using placeholders',
+    '请使用真实公司,姓名(勿使用占位符).',
   noSignature:
-    'Do not add a sign-off or signature (e.g. "Best regards", "Kind regards", "Sincerely") — the email client will add the signature automatically',
+    '请勿添加结束语或签名.',
   noSubjectLine:
     "Do not include a subject line in the output",
   keepShort:
@@ -262,17 +268,19 @@ export function buildRulesText(): string {
 /** Strategic prompt instructions for each email goal. */
 export const GOAL_PROMPTS: Record<string, string> = {
   'close-deal':
-    'Write with the strategic goal of CLOSING A DEAL. Create appropriate urgency, reinforce value and benefits, proactively address potential objections, and end with a clear, specific call to action. Use confident but not pushy language.',
+    '撰写时应以“促成交易”为目标。营造适当的紧迫感，强调价值与优势，主动化解潜在异议，并以清晰具体的行动号召收尾。用语应自信而不强硬。',
   'get-approval':
-    'Write with the strategic goal of GETTING A QUOTE OR PROPOSAL APPROVED. Summarize key value propositions concisely, address any likely concerns preemptively, create a sense of momentum, and make it easy to say yes with a clear next step.',
+    '撰写时应以“获得报价或提案批准”为目标。简明扼要地总结关键价值主张，预先化解可能的顾虑，营造势头，并通过明确的下一步行动让对方轻松说“好”。',
   'schedule-meeting':
-    'Write with the strategic goal of SCHEDULING A MEETING. Propose specific times (if context allows), emphasize the value of the meeting, keep it brief and action-oriented, and make it effortless to confirm.',
+    '撰写时应以“安排会议”为目标。提出具体时间，强调会议的价值，保持简洁且注重行动，并让确认会议变得轻而易举。',
   'follow-up':
-    'Write with the strategic goal of FOLLOWING UP ON AN OVERDUE ITEM. Be firm but professional, reference the original timeline, express understanding while maintaining urgency, and request a specific response or action by a clear date.',
+    '撰写时以“跟进逾期事项”为目标。态度要坚定但专业，提及原定时间表，在表达理解的同时保持紧迫感，并要求在明确的截止日期前给予具体回复或采取行动。',
   'request-intro':
-    'Write with the strategic goal of REQUESTING A FAVOR OR INTRODUCTION. Be respectful of the recipient\'s time, clearly explain the mutual benefit, make it easy to say yes by providing context they can forward, and express genuine appreciation.',
+    '撰写时以“请求帮助或引荐”为目标。尊重收件人的时间，清晰阐述互利之处，提供可转发的背景信息以便对方轻松答应，并表达真诚的谢意。',
   'resolve-complaint':
-    'Write with the strategic goal of RESOLVING A COMPLAINT. Acknowledge the issue with empathy, take ownership where appropriate, propose a concrete resolution, and aim to turn a negative experience into a positive one.',
+    '撰写时以“解决投诉”为目标。以同理心承认问题，在适当情况下承担责任，提出具体的解决方案，并致力于将负面体验转化为正面体验。',
+  'service-feathure':
+    '撰写时以 “优质服务” 为导向。秉持耐心尊重沟通，精准捕捉用户诉求，规范落实服务流程，并持续优化服务感受，打造稳定可靠的服务体验。',
 };
 
 /**
