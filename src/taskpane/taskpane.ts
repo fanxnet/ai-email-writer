@@ -738,7 +738,6 @@ async function handleGenerateReply(): Promise<void> {
   const instructions = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
   const tone = ($('reply-tone') as HTMLSelectElement)?.value || 'professional';
   const reasoningMode = ($('reply-reasoning') as HTMLSelectElement)?.value as ReasoningMode || 'off';
-  const includeOriginal = ($('reply-include-original') as HTMLInputElement)?.checked ?? true;
   const language = ($('reply-language') as HTMLSelectElement)?.value || 'auto';
   const goal = ($('reply-goal') as HTMLSelectElement)?.value || 'none';
   const customGoal = ($('reply-goal-custom') as HTMLInputElement)?.value || '';
@@ -746,7 +745,7 @@ async function handleGenerateReply(): Promise<void> {
 
   const options: DraftReplyOptions = {
     instructions,
-    tone, includeOriginal, language, reasoningMode,
+    tone, includeOriginal: true, language, reasoningMode,
     goalText,
   };
 
@@ -857,7 +856,10 @@ async function handleSuggestReplies(): Promise<void> {
 
     const emailSummary = `From: ${context.sender.name} <${context.sender.email}>\nSubject: ${context.subject}\n\n${context.body}`.slice(0, 2000);
 
-    const prompt = `Read this email and suggest exactly 3 short reply sentences (5-12 words each) that the user could send back as a response.
+    const isDouble = ($('reply-double') as HTMLInputElement)?.checked;
+    const wordRange = isDouble ? '10-24' : '5-12';
+
+    const prompt = `Read this email and suggest exactly 3 short reply sentences (${wordRange} words each) that the user could send back as a response.
 Each suggestion should be an actual reply message, NOT an email client action like archiving or unsubscribing.
 Return ONLY 3 lines, one suggestion per line. No numbering, no bullets, no quotes, no extra text.
 
@@ -878,10 +880,11 @@ ${emailSummary}`;
     container.innerHTML = '';
 
     // Parse line-separated suggestions — strip any numbering, bullets, or quotes
+    const maxLen = isDouble ? 240 : 120;
     const suggestions = result
       .split('\n')
       .map((line) => line.replace(/^\d+[\.\)\-]\s*/, '').replace(/^[-•*]\s*/, '').replace(/^["']|["']$/g, '').trim())
-      .filter((line) => line.length > 5 && line.length < 120)
+      .filter((line) => line.length > 5 && line.length < maxLen)
       .slice(0, 3);
 
     if (suggestions.length === 0) throw new Error('No suggestions returned. Please try again.');
