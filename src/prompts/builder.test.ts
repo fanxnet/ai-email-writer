@@ -12,7 +12,7 @@ import { buildPrompt, truncateContext, listPlaceholders } from './builder';
 // (appendRules path) is deterministic in tests.
 jest.mock('../features/settings', () => ({
   buildRulesText: () => '\n\nAdditional rules:\n- Mock rule',
-  buildProfileText: () => '\n\nAbout the sender (career profile "Engineer"):\nI build software.',
+  buildProfileText: () => '\n\nRole and profile:\nI build software.',
 }));
 
 // ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ Line 3: {{C}}`;
   it('should append rules and career profile when appendRules is true', () => {
     const result = buildPrompt('Hello {{NAME}}', { NAME: 'Alice' }, true);
     expect(result).toContain('Mock rule');
-    expect(result).toContain('career profile "Engineer"');
+    expect(result).toContain('Role and profile:');
     expect(result).toContain('I build software.');
   });
 

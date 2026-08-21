@@ -373,5 +373,5 @@ export function buildProfileText(): string {
   const career = getCareers().find((c) => c.id === settings.activeCareerId);
   if (!career || !career.description.trim()) return '';
 
-  return `\n\nAbout the sender (career profile "${career.name}"):\n${career.description.trim()}\n\nWrite emails from this person's professional perspective and role, using relevant terminology.`;
+  return `\n\nRole and profile:\n${career.description.trim()}`;
 }
