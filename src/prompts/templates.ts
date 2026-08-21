@@ -49,7 +49,7 @@ export const REPLY_PROMPT = `Role:As a professional email assistant;{{PROFILE}}
 目标:{{GOAL}}
 Requirements:
 - Tone: {{TONE}}
-- 语言优先级：回复说明中指定的回复语言>{{LANGUAGE}}
+- 语言：{{LANGUAGE}}
 - Address the reply to: {{REPLY_TO_NAME}} 
 - Write only the reply body (no subject)
 - Reference relevant points from the original email naturally
@@ -59,7 +59,7 @@ Requirements:
 {{ORIGINAL_EMAIL}}
 ---
 {{CONVERSATION_CONTEXT}}
-回复说明: {{REPLY_INSTRUCTIONS}}
+Reply instructions: {{REPLY_INSTRUCTIONS}}
 {{RULES}}`;
 
 // ---------------------------------------------------------------------------
