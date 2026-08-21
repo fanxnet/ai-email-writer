@@ -71,6 +71,7 @@ function makeSettings(overrides: Partial<AIComposeSettings> = {}): AIComposeSett
     customRules: '',
     activeCareerId: '',
     conversationContextEnabled: true,
+    reasoningMode: 'off',
     ...overrides,
   };
 }

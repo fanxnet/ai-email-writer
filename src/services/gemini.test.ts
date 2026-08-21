@@ -35,6 +35,12 @@ jest.mock('@google/genai', () => {
       OBJECT: 'OBJECT',
       ARRAY: 'ARRAY',
     },
+    ThinkingLevel: {
+      MINIMAL: 'MINIMAL',
+      LOW: 'LOW',
+      MEDIUM: 'MEDIUM',
+      HIGH: 'HIGH',
+    },
   };
 });
 
@@ -57,6 +63,25 @@ function streamOf(chunks: string[], perChunkDelayMs = 0): Promise<AsyncIterable<
           await new Promise((resolve) => setTimeout(resolve, perChunkDelayMs));
         }
         yield { text: chunk };
+      }
+    })(),
+  );
+}
+
+/** Like streamOf but attaches a `candidates[0].finishReason` on the final
+ * chunk so callers can inspect the model's stop reason. */
+function streamOfWithFinish(
+  chunks: string[],
+  finishReason: string,
+): Promise<AsyncIterable<{ text?: string; candidates?: Array<{ finishReason?: string }> }>> {
+  return Promise.resolve(
+    (async function* () {
+      for (let i = 0; i < chunks.length; i++) {
+        const last = i === chunks.length - 1;
+        yield {
+          text: chunks[i],
+          ...(last ? { candidates: [{ finishReason }] } : {}),
+        };
       }
     })(),
   );
@@ -149,6 +174,48 @@ describe('generateText — success', () => {
 });
 
 // ---------------------------------------------------------------------------
+// generateText — thinking config (Reasoning Mode)
+// ---------------------------------------------------------------------------
+
+describe('generateText — reasoning mode', () => {
+  it('disables thinking for gemini-3 models when reasoning is off', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
+
+    await generateText('Test prompt', { reasoningMode: 'off' });
+
+    const config = mockGenerateContentStream.mock.calls[0][0].config;
+    expect(config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
+  });
+
+  it('uses thinkingBudget 0 for gemini-2.5 models when reasoning is off', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
+
+    await generateText('Test prompt', { model: 'gemini-2.5-pro', reasoningMode: 'off' });
+
+    const config = mockGenerateContentStream.mock.calls[0][0].config;
+    expect(config.thinkingConfig).toEqual({ thinkingBudget: 0 });
+  });
+
+  it('uses dynamic thinking for balanced mode', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
+
+    await generateText('Test prompt', { model: 'gemini-2.5-pro', reasoningMode: 'balanced' });
+
+    const config = mockGenerateContentStream.mock.calls[0][0].config;
+    expect(config.thinkingConfig).toEqual({ thinkingBudget: -1 });
+  });
+
+  it('uses HIGH thinking level for high mode on gemini-3 models', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
+
+    await generateText('Test prompt', { model: 'gemini-3.5-flash', reasoningMode: 'high' });
+
+    const config = mockGenerateContentStream.mock.calls[0][0].config;
+    expect(config.thinkingConfig).toEqual({ thinkingLevel: 'HIGH' });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // generateText — error handling
 // ---------------------------------------------------------------------------
 
@@ -180,6 +247,24 @@ describe('generateText — error handling', () => {
 
     await expect(generateText('test')).rejects.toMatchObject({
       code: GeminiErrorCode.CONTENT_FILTERED,
+    });
+  });
+
+  it('reports a truncated response when finishReason is MAX_TOKENS and text is empty', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOfWithFinish([''], 'MAX_TOKENS'));
+
+    await expect(generateText('test')).rejects.toMatchObject({
+      code: GeminiErrorCode.CONTENT_FILTERED,
+      message: expect.stringContaining('token limit'),
+    });
+  });
+
+  it('reports a safety-blocked response when finishReason is SAFETY and text is empty', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOfWithFinish([''], 'SAFETY'));
+
+    await expect(generateText('test')).rejects.toMatchObject({
+      code: GeminiErrorCode.CONTENT_FILTERED,
+      message: expect.stringContaining('safety filters'),
     });
   });
 

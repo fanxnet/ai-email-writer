@@ -17,6 +17,7 @@ import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { detectEmailLanguage } from '../prompts/language-detection';
 import { REPLY_PROMPT } from '../prompts/templates';
+import { getSetting, ReasoningMode } from './settings';
 import {
   getCurrentEmailBody,
   getCurrentEmailSubject,
@@ -25,7 +26,6 @@ import {
   EmailContact,
 } from '../services/outlook';
 import { getSessionKey } from './auto-save';
-import { getSetting } from './settings';
 import {
   appendTurn,
   buildReplyContext,
@@ -47,6 +47,7 @@ export interface DraftReplyOptions {
   tone: string;
   includeOriginal: boolean;
   language?: string;
+  reasoningMode?: ReasoningMode;
 }
 
 export interface EmailContext {
@@ -191,7 +192,8 @@ export async function generateReply(
 
   const reply = await generateText(prompt, {
     temperature: 0.7,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 8192,
+    reasoningMode: options.reasoningMode,
     onStream,
   });
 
@@ -208,6 +210,7 @@ export async function generateReply(
       tone: options.tone || 'professional',
       includeOriginal: options.includeOriginal !== false,
       language: options.language,
+      reasoningMode: options.reasoningMode,
     });
     void compactIfNeeded(sessionKey);
   }
@@ -238,12 +241,14 @@ export function restoreFromHistory(key: string): { reply: string; options: Draft
         tone: record.lastRequest.tone || 'professional',
         includeOriginal: record.lastRequest.includeOriginal !== false,
         language: record.lastRequest.language || 'auto',
+        reasoningMode: (record.lastRequest.reasoningMode as ReasoningMode) || 'off',
       }
     : {
         instructions: lastUser?.content || '',
         tone: 'professional',
         includeOriginal: true,
         language: 'auto',
+        reasoningMode: 'off',
       };
 
   lastReply = reply;
@@ -293,7 +298,8 @@ Requirements:
 
   const refined = await generateText(prompt, {
     temperature: 0.6,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 8192,
+    reasoningMode: lastReplyOptions?.reasoningMode,
     onStream,
   });
 

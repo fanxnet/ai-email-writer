@@ -20,6 +20,11 @@ export type Tone = "professional" | "formal" | "friendly" | "casual";
 /** Summary style options for the Summarize feature. */
 export type SummaryStyle = "bullets" | "paragraph" | "tldr";
 
+/** Reasoning effort for generation. 'off' disables model thinking (fast,
+ * cheap, avoids the empty-response bug); 'balanced' uses default/dynamic
+ * thinking; 'high' requests maximum reasoning depth. */
+export type ReasoningMode = "off" | "balanced" | "high";
+
 /** All persisted user preferences. */
 export interface AIComposeSettings {
   /** Selected AI Provider: 'gemini' | 'deepseek' */
@@ -59,6 +64,9 @@ export interface AIComposeSettings {
   activeCareerId: string;
   /** Whether the Reply feature keeps per-email conversation context. */
   conversationContextEnabled: boolean;
+  /** Reasoning mode for generation. Defaults to 'off' so model thinking
+   * (which shares the maxOutputTokens budget) cannot swallow the output. */
+  reasoningMode: ReasoningMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +97,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   customRules: "",
   activeCareerId: "",
   conversationContextEnabled: true,
+  reasoningMode: "off",
 };
 
 // ---------------------------------------------------------------------------

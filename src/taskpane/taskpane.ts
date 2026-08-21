@@ -71,6 +71,7 @@ import {
   resetSettings,
   getSetting,
   AIComposeSettings,
+  ReasoningMode,
 } from '../features/settings';
 import {
   autoSaveEntry,
@@ -735,6 +736,7 @@ window.addEventListener('beforeunload', () => abortDeepSeekRequest());
 async function handleGenerateReply(): Promise<void> {
   const instructions = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
   const tone = ($('reply-tone') as HTMLSelectElement)?.value || 'professional';
+  const reasoningMode = ($('reply-reasoning') as HTMLSelectElement)?.value as ReasoningMode || 'off';
   const includeOriginal = ($('reply-include-original') as HTMLInputElement)?.checked ?? true;
   const language = ($('reply-language') as HTMLSelectElement)?.value || 'auto';
   const goal = ($('reply-goal') as HTMLSelectElement)?.value || 'none';
@@ -743,7 +745,7 @@ async function handleGenerateReply(): Promise<void> {
 
   const options: DraftReplyOptions = {
     instructions: instructions + goalText,
-    tone, includeOriginal, language,
+    tone, includeOriginal, language, reasoningMode,
   };
 
   hideError();
@@ -1373,6 +1375,10 @@ Office.onReady((info) => {
       if (draftTone) draftTone.value = s.defaultTone;
       if (replyTone) replyTone.value = s.defaultTone;
 
+      // Reasoning mode select (defaults to persisted setting)
+      const replyReasoning = $('reply-reasoning') as HTMLSelectElement | null;
+      if (replyReasoning) replyReasoning.value = s.reasoningMode || 'off';
+
       // Summary style radio buttons
       const summaryRadio = document.querySelector(
         `input[name="summary-style"][value="${s.defaultSummaryStyle}"]`,
@@ -1441,8 +1447,14 @@ Office.onReady((info) => {
       if (!sel) return;
       saveSettings({ ...loadSettings(), translateLanguage: sel.value });
     };
+    const persistReplyReasoning = (): void => {
+      const sel = $('reply-reasoning') as HTMLSelectElement | null;
+      if (!sel) return;
+      saveSettings({ ...loadSettings(), reasoningMode: sel.value as AIComposeSettings['reasoningMode'] });
+    };
     $('reply-language')?.addEventListener('change', persistReplyLanguage);
     $('translate-language')?.addEventListener('change', persistTranslateLanguage);
+    $('reply-reasoning')?.addEventListener('change', persistReplyReasoning);
 
     // --- Outlook theme detection (light/dark) ---
     try {

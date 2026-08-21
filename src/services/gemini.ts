@@ -10,8 +10,8 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
-import { getSetting } from '../features/settings';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import { getSetting, ReasoningMode } from '../features/settings';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,6 +35,9 @@ export interface GenerateOptions {
   onStream?: (delta: string) => void;
   /** Number of automatic retries for transient failures. Default: 3. */
   maxRetries?: number;
+  /** Reasoning effort. When omitted, falls back to the user's saved
+   * `reasoningMode` setting ('off' by default). */
+  reasoningMode?: ReasoningMode;
 }
 
 /** Options for structured JSON generation. */
@@ -55,6 +58,8 @@ export interface GenerateJsonOptions {
   onStream?: (delta: string) => void;
   /** Number of automatic retries for transient failures. Default: 3. */
   maxRetries?: number;
+  /** Reasoning effort. Falls back to the user's saved `reasoningMode`. */
+  reasoningMode?: ReasoningMode;
 }
 
 /** Error codes surfaced by the Gemini service. */
@@ -171,10 +176,11 @@ export async function generateText(
 ): Promise<string> {
   const client = getClient();
   const modelName = options.model ?? getSetting('defaultModel') ?? FALLBACK_MODEL;
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
 
   const callFn = async (): Promise<string> => {
     try {
-      const text = await collectModelStream(
+      const { text, finishReason } = await collectModelStream(
         client.models.generateContentStream({
           model: modelName,
           contents: prompt,
@@ -183,16 +189,14 @@ export async function generateText(
             maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
             topP: options.topP ?? DEFAULT_TOP_P,
             topK: options.topK ?? DEFAULT_TOP_K,
+            thinkingConfig: resolveThinkingConfig(modelName, reasoningMode),
           },
         }),
         options.onStream,
       );
 
       if (!text || text.trim().length === 0) {
-        throw new GeminiError(
-          'The model returned an empty response. The content may have been filtered.',
-          GeminiErrorCode.CONTENT_FILTERED,
-        );
+        throw emptyResponseError(finishReason);
       }
 
       return text;
@@ -223,10 +227,11 @@ export async function generateJson<T = Record<string, unknown>>(
 ): Promise<T> {
   const client = getClient();
   const modelName = options.model ?? getSetting('defaultModel') ?? FALLBACK_MODEL;
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
 
   const callFn = async (): Promise<T> => {
     try {
-      const text = await collectModelStream(
+      const { text, finishReason } = await collectModelStream(
         client.models.generateContentStream({
           model: modelName,
           contents: prompt,
@@ -239,17 +244,14 @@ export async function generateJson<T = Record<string, unknown>>(
             // Disable thinking for structured JSON — thinking models burn
             // tokens from the maxOutputTokens budget on internal reasoning,
             // leaving too few for the actual JSON response.
-            thinkingConfig: { thinkingBudget: 0 },
+            thinkingConfig: resolveThinkingConfig(modelName, reasoningMode),
           },
         }),
         options.onStream,
       );
 
       if (!text || text.trim().length === 0) {
-        throw new GeminiError(
-          'The model returned an empty response.',
-          GeminiErrorCode.CONTENT_FILTERED,
-        );
+        throw emptyResponseError(finishReason);
       }
 
       // Try direct JSON parse first, then extract JSON from text as fallback
@@ -287,26 +289,37 @@ export async function generateJson<T = Record<string, unknown>>(
  *  - Stall window: fails if the stream goes quiet for `STALL_TIMEOUT_MS`.
  *  - Overall ceiling: fails if the whole response exceeds `OVERALL_TIMEOUT_MS`.
  *
+ * Also captures the model's `finishReason` from the final chunk (e.g.
+ * `STOP`, `MAX_TOKENS`, `SAFETY`) so callers can report why generation
+ * ended instead of only seeing an empty string.
+ *
  * @param streamLike A promise (or value) resolving to an async iterable of
  *                   chunks exposing `text`. Accepts both the raw async
  *                   iterable and the SDK's stream result wrapper.
  * @param onStream   Optional callback invoked with each text delta.
+ * @returns The accumulated text plus the last seen finish reason.
  * @throws {GeminiError} with `code = TIMEOUT` (non-retryable) on health failures.
  */
+interface StreamChunk {
+  text?: string;
+  candidates?: Array<{ finishReason?: string }>;
+}
+
 async function collectModelStream(
   streamLike:
-    | AsyncIterable<{ text?: string }>
-    | Promise<AsyncIterable<{ text?: string }>>
-    | Promise<{ stream: AsyncIterable<{ text?: string }> }>,
+    | AsyncIterable<StreamChunk>
+    | Promise<AsyncIterable<StreamChunk>>
+    | Promise<{ stream: AsyncIterable<StreamChunk> }>,
   onStream?: (delta: string) => void,
-): Promise<string> {
+): Promise<{ text: string; finishReason?: string }> {
   const resolved = await Promise.resolve(streamLike);
-  const iterable: AsyncIterable<{ text?: string }> =
-    typeof (resolved as { stream?: AsyncIterable<{ text?: string }> }).stream === 'object'
-      ? (resolved as { stream: AsyncIterable<{ text?: string }> }).stream
-      : (resolved as AsyncIterable<{ text?: string }>);
+  const iterable: AsyncIterable<StreamChunk> =
+    typeof (resolved as { stream?: AsyncIterable<StreamChunk> }).stream === 'object'
+      ? (resolved as { stream: AsyncIterable<StreamChunk> }).stream
+      : (resolved as AsyncIterable<StreamChunk>);
 
   let text = '';
+  let finishReason: string | undefined;
   let firstByte = false;
   const startedAt = Date.now();
 
@@ -322,7 +335,7 @@ async function collectModelStream(
     const tierMs = firstByte ? STALL_TIMEOUT_MS : CONNECT_TIMEOUT_MS;
     const waitMs = Math.min(tierMs, overallLeft);
 
-    let next: IteratorResult<{ text?: string }>;
+    let next: IteratorResult<StreamChunk>;
     try {
       next = await raceWithTimeout(iterator.next(), waitMs, () =>
         streamTimeoutError(firstByte ? 'stall' : 'connect'),
@@ -335,6 +348,9 @@ async function collectModelStream(
     if (next.done) break;
     firstByte = true;
 
+    const reason = next.value.candidates?.[0]?.finishReason;
+    if (reason) finishReason = reason;
+
     const delta = next.value.text ?? '';
     if (delta) {
       text += delta;
@@ -342,12 +358,63 @@ async function collectModelStream(
     }
   }
 
-  return text;
+  return { text, finishReason };
+}
+
+/**
+ * Map a normalized ReasoningMode onto the model's native thinking config.
+ *
+ * Gemini 2.5 series uses `thinkingBudget` (0 = disabled, -1 = dynamic, or an
+ * explicit token count). Gemini 3 series uses `thinkingLevel` (MINIMAL/LOW/
+ * MEDIUM/HIGH). The model is detected by its name prefix.
+ *
+ * Known limits (documented by Google):
+ *  - Gemini 3 Flash / Flash-Lite cannot fully disable thinking; MINIMAL is the
+ *    lowest level and still permits minimal reasoning on complex tasks.
+ *  - Gemini 2.5 Pro cannot disable thinking; `thinkingBudget: 0` is best-effort.
+ */
+function resolveThinkingConfig(
+  modelName: string,
+  reasoningMode: ReasoningMode,
+): { thinkingBudget?: number; thinkingLevel?: ThinkingLevel } {
+  const isGemini25 = /gemini-2\.5/i.test(modelName);
+
+  if (reasoningMode === 'off') {
+    return isGemini25 ? { thinkingBudget: 0 } : { thinkingLevel: ThinkingLevel.MINIMAL };
+  }
+  if (reasoningMode === 'high') {
+    return isGemini25 ? { thinkingBudget: 16384 } : { thinkingLevel: ThinkingLevel.HIGH };
+  }
+  // Balanced — default / dynamic thinking.
+  return isGemini25 ? { thinkingBudget: -1 } : { thinkingLevel: ThinkingLevel.MEDIUM };
+}
+
+/**
+ * Build the typed error thrown when the model returns no text, choosing a
+ * message based on the stream's finish reason so the user gets a precise
+ * explanation instead of a generic "empty response".
+ */
+function emptyResponseError(finishReason?: string): GeminiError {
+  if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+    return new GeminiError(
+      'The model returned an empty response. The content was blocked by safety filters.',
+      GeminiErrorCode.CONTENT_FILTERED,
+    );
+  }
+  if (finishReason === 'MAX_TOKENS') {
+    return new GeminiError(
+      'The model response was cut off because it reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
+      GeminiErrorCode.CONTENT_FILTERED,
+    );
+  }
+  return new GeminiError(
+    'The model returned an empty response. The content may have been filtered.',
+    GeminiErrorCode.CONTENT_FILTERED,
+  );
 }
 
 /** Build a typed timeout error for one of the health-monitoring tiers. */
-function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): GeminiError {
-  let message: string;
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): GeminiError {  let message: string;
   if (kind === 'connect') {
     message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
   } else if (kind === 'stall') {

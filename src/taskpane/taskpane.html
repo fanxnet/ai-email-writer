@@ -630,6 +630,16 @@
               <option value="casual">Casual</option>
             </select>
           </div>
+          <div class="flex-1 min-w-0">
+            <label class="block text-sm font-medium text-aic-text-secondary mb-xs" for="reply-reasoning"
+              >Reasoning</label
+            >
+            <select id="reply-reasoning" class="aic-select" title="Controls model thinking. Off is fastest and avoids token limits; use High for complex replies.">
+              <option value="off" selected>Off (fast)</option>
+              <option value="balanced">Balanced</option>
+              <option value="high">High (deep)</option>
+            </select>
+          </div>
           <div class="flex-1 flex items-center pb-[7px]">
             <label class="aic-checkbox">
               <input id="reply-include-original" type="checkbox" checked />

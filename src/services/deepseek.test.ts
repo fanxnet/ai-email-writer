@@ -53,6 +53,11 @@ function delta(content: string): string {
   return `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
 }
 
+/** One SSE chunk that carries a `finish_reason` (e.g. 'stop', 'length'). */
+function finish(finishReason: string): string {
+  return `data: ${JSON.stringify({ choices: [{ finish_reason: finishReason, delta: {} }] })}\n\n`;
+}
+
 const DONE = 'data: [DONE]\n\n';
 
 /** A fetch that never resolves until aborted (for abort/timeout tests). */
@@ -136,6 +141,46 @@ describe('generateText', () => {
       retryable: false,
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables thinking by default (reasoning off)', async () => {
+    mockFetch.mockResolvedValue(sseResponse([delta('Hello '), delta('there!'), DONE]));
+
+    await generateText('Say hi', { model: 'deepseek-v4-flash' });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+
+  it('enables max reasoning when reasoning mode is high', async () => {
+    mockFetch.mockResolvedValue(sseResponse([delta('Hi'), DONE]));
+
+    await generateText('Say hi', { model: 'deepseek-v4-flash', reasoningMode: 'high' });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.thinking).toEqual({ type: 'enabled' });
+    expect(body.reasoning_effort).toBe('max');
+  });
+
+  it('reports a truncated response when finish_reason is length and text is empty', async () => {
+    mockFetch.mockResolvedValue(sseResponse([finish('length'), DONE]));
+
+    await expect(generateText('Say hi', { model: 'deepseek-v4-flash' })).rejects.toMatchObject({
+      code: DeepSeekErrorCode.EMPTY_RESPONSE,
+      message: expect.stringContaining('token limit'),
+    });
+  });
+
+  it('reports a content-filtered response when finish_reason is content_filter', async () => {
+    mockFetch.mockResolvedValue(sseResponse([finish('content_filter'), DONE]));
+
+    await expect(generateText('Say hi', { model: 'deepseek-v4-flash' })).rejects.toMatchObject({
+      code: DeepSeekErrorCode.EMPTY_RESPONSE,
+      message: expect.stringContaining('content filters'),
+    });
   });
 
   it('throws a non-retryable INVALID_API_KEY error for 401 responses', async () => {

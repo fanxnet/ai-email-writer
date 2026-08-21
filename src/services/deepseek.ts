@@ -6,7 +6,7 @@
  * backoff, and granular error handling.
  */
 
-import { getSetting } from '../features/settings';
+import { getSetting, ReasoningMode } from '../features/settings';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -106,11 +106,12 @@ export function abortDeepSeekRequest(): void {
 async function streamChatCompletion(
   body: Record<string, unknown>,
   onStream?: (delta: string) => void,
-): Promise<string> {
+): Promise<{ text: string; finishReason?: string }> {
   const controller = new AbortController();
   activeController = controller;
   const startedAt = Date.now();
   let text = '';
+  let finishReason: string | undefined;
   let firstByte = false;
 
   const buildBody = () =>
@@ -187,7 +188,9 @@ async function streamChatCompletion(
 
         try {
           const chunk = JSON.parse(payload);
-          const delta = chunk.choices?.[0]?.delta?.content;
+          const choice = chunk.choices?.[0];
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
+          const delta = choice?.delta?.content;
           if (typeof delta === 'string' && delta.length > 0) {
             text += delta;
             onStream?.(delta);
@@ -208,7 +211,9 @@ async function streamChatCompletion(
         if (payload && payload !== '[DONE]') {
           try {
             const chunk = JSON.parse(payload);
-            const delta = chunk.choices?.[0]?.delta?.content;
+            const choice = chunk.choices?.[0];
+            if (choice?.finish_reason) finishReason = choice.finish_reason;
+            const delta = choice?.delta?.content;
             if (typeof delta === 'string' && delta.length > 0) {
               text += delta;
               onStream?.(delta);
@@ -220,7 +225,7 @@ async function streamChatCompletion(
       }
     }
 
-    return text;
+    return { text, finishReason };
   } catch (error) {
     throw classifyStreamError(error, controller);
   } finally {
@@ -228,9 +233,54 @@ async function streamChatCompletion(
   }
 }
 
+/**
+ * Map a normalized ReasoningMode onto DeepSeek's OpenAI-compatible request
+ * params. DeepSeek V4 enables thinking by default with `reasoning_effort: high`;
+ * when thinking is on, reasoning tokens are spent from the same `max_tokens`
+ * budget as the visible output — which is exactly how the output can be
+ * starved (the empty-response bug). `off` disables thinking entirely.
+ */
+function resolveThinkingParams(
+  reasoningMode: ReasoningMode,
+): Record<string, unknown> {
+  if (reasoningMode === 'off') {
+    return { thinking: { type: 'disabled' } };
+  }
+  if (reasoningMode === 'high') {
+    return { thinking: { type: 'enabled' }, reasoning_effort: 'max' };
+  }
+  return { thinking: { type: 'enabled' }, reasoning_effort: 'medium' };
+}
+
+/**
+ * Build the typed error thrown when DeepSeek returns no text, choosing a
+ * message based on the stream's finish reason so the user gets a precise
+ * explanation instead of a generic "empty response".
+ */
+function emptyResponseError(finishReason?: string): DeepSeekError {
+  if (finishReason === 'length') {
+    return new DeepSeekError(
+      'The model response was cut off because it reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
+      DeepSeekErrorCode.EMPTY_RESPONSE,
+      false,
+    );
+  }
+  if (finishReason === 'content_filter') {
+    return new DeepSeekError(
+      'The model returned an empty response. The content was blocked by content filters.',
+      DeepSeekErrorCode.EMPTY_RESPONSE,
+      false,
+    );
+  }
+  return new DeepSeekError(
+    'The model returned an empty response.',
+    DeepSeekErrorCode.EMPTY_RESPONSE,
+    false,
+  );
+}
+
 /** Build a typed timeout error for one of the health-monitoring tiers. */
-function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {
-  let message: string;
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {  let message: string;
   if (kind === 'connect') {
     message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
   } else if (kind === 'stall') {
@@ -374,24 +424,22 @@ export async function generateText(
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
   const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-v4-flash';
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
 
   const callFn = async () => {
-    const text = await streamChatCompletion(
+    const { text, finishReason } = await streamChatCompletion(
       {
         model: modelName,
         messages: [{ role: 'user', content: prompt }],
         temperature: options.temperature ?? 1.0,
         max_tokens: options.maxOutputTokens ?? 2048,
+        ...resolveThinkingParams(reasoningMode),
       },
       options.onStream,
     );
 
     if (!text || !text.trim()) {
-      throw new DeepSeekError(
-        'The model returned an empty response.',
-        DeepSeekErrorCode.EMPTY_RESPONSE,
-        false,
-      );
+      throw emptyResponseError(finishReason);
     }
     return text;
   };
@@ -407,9 +455,10 @@ export async function generateJson<T = Record<string, unknown>>(
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
   const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-v4-flash';
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
 
   const callFn = async () => {
-    const text = await streamChatCompletion(
+    const { text, finishReason } = await streamChatCompletion(
       {
         model: modelName,
         messages: [
@@ -419,16 +468,13 @@ export async function generateJson<T = Record<string, unknown>>(
         temperature: options.temperature ?? 0.1,
         max_tokens: options.maxOutputTokens ?? 1024,
         response_format: { type: 'json_object' },
+        ...resolveThinkingParams(reasoningMode),
       },
       options.onStream,
     );
 
     if (!text || !text.trim()) {
-      throw new DeepSeekError(
-        'The model returned an empty response.',
-        DeepSeekErrorCode.EMPTY_RESPONSE,
-        false,
-      );
+      throw emptyResponseError(finishReason);
     }
 
     try {

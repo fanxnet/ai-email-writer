@@ -44,6 +44,7 @@ export interface LastRequest {
   tone: string;
   includeOriginal: boolean;
   language?: string;
+  reasoningMode?: string;
 }
 
 export interface ReplyContextBlock {
