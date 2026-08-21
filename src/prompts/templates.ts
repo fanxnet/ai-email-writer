@@ -51,7 +51,7 @@ Requirements:
 - Tone: {{TONE}}
 - 语言优先级：回复说明中指定的回复语言>{{LANGUAGE}}
 - Address the reply to: {{REPLY_TO_NAME}} (the sender of the original email )
-- Reply body only — no subject, no sign-off,no commentary outside the reply
+- Write only the reply body — no subject, no signature,no commentary outside the reply
 - Reference relevant points from the original email naturally
 - Keep the reply focused and professional
 以下是您要回复的原始邮件:
