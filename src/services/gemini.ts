@@ -365,8 +365,13 @@ async function collectModelStream(
  * Map a normalized ReasoningMode onto the model's native thinking config.
  *
  * Gemini 2.5 series uses `thinkingBudget` (0 = disabled, -1 = dynamic, or an
- * explicit token count). Gemini 3 series uses `thinkingLevel` (MINIMAL/LOW/
- * MEDIUM/HIGH). The model is detected by its name prefix.
+ * explicit token count). Versioned Gemini 3 models (e.g. gemini-3.5-flash)
+ * use `thinkingLevel` (MINIMAL/LOW/MEDIUM/HIGH).
+ *
+ * Ambiguous aliases such as `gemini-flash-latest` / `gemini-flash-lite-latest`
+ * do NOT reliably accept `thinkingLevel` (some reject `MINIMAL`), so for those
+ * we fall back to the broadly-compatible `thinkingBudget` knob, which is also
+ * what `generateJson` already sends and is accepted across model families.
  *
  * Known limits (documented by Google):
  *  - Gemini 3 Flash / Flash-Lite cannot fully disable thinking; MINIMAL is the
@@ -378,15 +383,18 @@ function resolveThinkingConfig(
   reasoningMode: ReasoningMode,
 ): { thinkingBudget?: number; thinkingLevel?: ThinkingLevel } {
   const isGemini25 = /gemini-2\.5/i.test(modelName);
+  const isVersionedGemini3 = /^gemini-3[.\-]/i.test(modelName);
+  const useBudget = isGemini25 || !isVersionedGemini3;
 
-  if (reasoningMode === 'off') {
-    return isGemini25 ? { thinkingBudget: 0 } : { thinkingLevel: ThinkingLevel.MINIMAL };
+  if (useBudget) {
+    if (reasoningMode === 'off') return { thinkingBudget: 0 };
+    if (reasoningMode === 'high') return { thinkingBudget: 16384 };
+    return { thinkingBudget: -1 };
   }
-  if (reasoningMode === 'high') {
-    return isGemini25 ? { thinkingBudget: 16384 } : { thinkingLevel: ThinkingLevel.HIGH };
-  }
-  // Balanced — default / dynamic thinking.
-  return isGemini25 ? { thinkingBudget: -1 } : { thinkingLevel: ThinkingLevel.MEDIUM };
+
+  if (reasoningMode === 'off') return { thinkingLevel: ThinkingLevel.MINIMAL };
+  if (reasoningMode === 'high') return { thinkingLevel: ThinkingLevel.HIGH };
+  return { thinkingLevel: ThinkingLevel.MEDIUM };
 }
 
 /**

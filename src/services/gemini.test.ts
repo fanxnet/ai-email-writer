@@ -213,6 +213,15 @@ describe('generateText — reasoning mode', () => {
     const config = mockGenerateContentStream.mock.calls[0][0].config;
     expect(config.thinkingConfig).toEqual({ thinkingLevel: 'HIGH' });
   });
+
+  it('falls back to thinkingBudget for ambiguous aliases like gemini-flash-latest', async () => {
+    mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
+
+    await generateText('Test prompt', { model: 'gemini-flash-latest', reasoningMode: 'off' });
+
+    const config = mockGenerateContentStream.mock.calls[0][0].config;
+    expect(config.thinkingConfig).toEqual({ thinkingBudget: 0 });
+  });
 });
 
 // ---------------------------------------------------------------------------
