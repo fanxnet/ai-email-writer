@@ -1421,9 +1421,11 @@ Office.onReady((info) => {
       const sTone = $('settings-tone') as HTMLSelectElement | null;
       const sStyle = $('settings-summary-style') as HTMLSelectElement | null;
       const sLang = $('settings-language') as HTMLSelectElement | null;
+      const sReplyStyle = $('settings-reply-style') as HTMLSelectElement | null;
       if (sTone) sTone.value = s.defaultTone;
       if (sStyle) sStyle.value = s.defaultSummaryStyle;
       if (sLang) sLang.value = s.defaultLanguage;
+      if (sReplyStyle) sReplyStyle.value = s.replyStyleMode || 'match-original';
 
       // Rules form
       for (const [key, enabled] of Object.entries(s.presetRules)) {
@@ -1810,6 +1812,7 @@ Office.onReady((info) => {
       const model = ($('settings-model') as HTMLSelectElement)?.value || (provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-flash-latest');
       const tone = ($('settings-tone') as HTMLSelectElement)?.value || 'professional';
       const summaryStyle = ($('settings-summary-style') as HTMLSelectElement)?.value || 'bullets';
+      const replyStyle = ($('settings-reply-style') as HTMLSelectElement)?.value || 'match-original';
 
       // Validate API key format
       const keyError = $('api-key-error');
@@ -1834,6 +1837,7 @@ Office.onReady((info) => {
         defaultModel: model,
         defaultTone: tone as any,
         defaultSummaryStyle: summaryStyle as any,
+        replyStyleMode: replyStyle as 'match-original' | 'plain',
         activeCareerId: ($('career-active') as HTMLSelectElement)?.value || '',
       };
 

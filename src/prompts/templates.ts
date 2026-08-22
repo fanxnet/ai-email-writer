@@ -18,8 +18,7 @@
  * Placeholders: {{PROFILE}}, {{GOAL}}, {{INSTRUCTIONS}}, {{TONE}},
  *               {{LANGUAGE}}, {{RULES}}
  */
-export const DRAFT_EMAIL_PROMPT = `You are a professional email assistant.
-{{PROFILE}}
+export const DRAFT_EMAIL_PROMPT = `Role:As a professional email assistant;{{PROFILE}}
 {{GOAL}}
 Draft a complete email based on the following instructions:
 
@@ -27,7 +26,7 @@ Draft a complete email based on the following instructions:
 
 Requirements:
 - Tone: {{TONE}}
-- Language: {{LANGUAGE}}
+- Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
 - Include a subject line on the first line prefixed with "Subject: "
 - Use an appropriate greeting
 - Keep the email concise and to the point

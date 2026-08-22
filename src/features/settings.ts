@@ -66,6 +66,18 @@ export interface AIComposeSettings {
   /** Reasoning mode for generation. Defaults to 'off' so model thinking
    * (which shares the maxOutputTokens budget) cannot swallow the output. */
   reasoningMode: ReasoningMode;
+  /**
+   * Reply style mode — controls whether the AI-generated reply is styled
+   * to match the original email's font look.
+   *
+   * Only applied by the Reply feature (draft-reply.ts). Draft Email is
+   * unaffected (always plain HTML).
+   *
+   * - 'match-original': extract font-family/size/color from the original
+   *   email HTML and apply as inline styles on each reply paragraph.
+   * - 'plain': bare <p>+<br> HTML with no inline styles (current default).
+   */
+  replyStyleMode: 'match-original' | 'plain';
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +109,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   activeCareerId: "",
   conversationContextEnabled: true,
   reasoningMode: "off",
+  replyStyleMode: "match-original",
 };
 
 // ---------------------------------------------------------------------------

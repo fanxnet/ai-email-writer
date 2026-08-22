@@ -17,8 +17,10 @@ import { generateText } from '../services/ai-service';
 import { buildPrompt, truncateContext } from '../prompts/builder';
 import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
+import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
 import {
   getCurrentEmailBody,
+  getCurrentEmailBodyHtml,
   getCurrentEmailSubject,
   getOriginalSender,
   getItemMode,
@@ -292,28 +294,24 @@ Requirements:
  * Insert the reply text into the currently active compose window.
  * Works when the user has already clicked Reply or Reply All in Outlook.
  */
-export function insertIntoReply(replyText: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const mode = getItemMode();
+export async function insertIntoReply(replyText: string): Promise<void> {
+  const html = await buildReplyHtml(replyText);
+  const mode = getItemMode();
 
-    if (mode !== 'compose') {
-      // Not in compose mode — open a reply window instead
-      // We'll use displayReplyForm which opens a reply compose
-      const item = Office.context.mailbox.item as any;
-      if (item && typeof item.displayReplyForm === 'function') {
-        item.displayReplyForm(bodyToHtml(replyText));
-        resolve();
-        return;
-      }
-      reject(new Error('Cannot insert reply — no compose window is open. Please click Reply first.'));
+  if (mode !== 'compose') {
+    const item = Office.context.mailbox.item as any;
+    if (item && typeof item.displayReplyForm === 'function') {
+      item.displayReplyForm(html);
       return;
     }
+    throw new Error('Cannot insert reply — no compose window is open. Please click Reply first.');
+  }
 
-    // In compose mode — insert into the body
-    const item = Office.context.mailbox.item as any;
-    if (item && item.body && typeof item.body.setAsync === 'function') {
+  const item = Office.context.mailbox.item as any;
+  if (item && item.body && typeof item.body.setAsync === 'function') {
+    return new Promise((resolve, reject) => {
       item.body.setAsync(
-        bodyToHtml(replyText),
+        html,
         { coercionType: Office.CoercionType.Html },
         (result: Office.AsyncResult<void>) => {
           if (result.status === Office.AsyncResultStatus.Succeeded) {
@@ -323,10 +321,9 @@ export function insertIntoReply(replyText: string): Promise<void> {
           }
         },
       );
-    } else {
-      reject(new Error('Cannot insert reply — compose body is not accessible.'));
-    }
-  });
+    });
+  }
+  throw new Error('Cannot insert reply — compose body is not accessible.');
 }
 
 /**
@@ -334,24 +331,20 @@ export function insertIntoReply(replyText: string): Promise<void> {
  * In compose mode: inserts the text directly into the active compose body.
  * In read mode: opens a Reply compose window via displayReplyForm.
  */
-export function openReply(replyText: string): void {
+export async function openReply(replyText: string): Promise<void> {
+  const html = await buildReplyHtml(replyText);
   const mode = getItemMode();
   const item = Office.context.mailbox.item as any;
 
   if (mode === 'compose') {
-    // Insert directly into the active compose body
     if (item && item.body && typeof item.body.prependAsync === 'function') {
-      item.body.prependAsync(
-        bodyToHtml(replyText),
-        { coercionType: Office.CoercionType.Html },
-      );
+      item.body.prependAsync(html, { coercionType: Office.CoercionType.Html });
     } else {
       throw new Error('Cannot insert reply — compose body is not accessible.');
     }
   } else {
-    // Read mode — open a reply window
     if (item && typeof item.displayReplyForm === 'function') {
-      item.displayReplyForm(bodyToHtml(replyText));
+      item.displayReplyForm(html);
     } else {
       throw new Error('Cannot open reply window. Please make sure an email is selected.');
     }
@@ -363,24 +356,20 @@ export function openReply(replyText: string): void {
  * In compose mode: inserts the text directly into the active compose body.
  * In read mode: opens a Reply All compose window via displayReplyAllForm.
  */
-export function openReplyAll(replyText: string): void {
+export async function openReplyAll(replyText: string): Promise<void> {
+  const html = await buildReplyHtml(replyText);
   const mode = getItemMode();
   const item = Office.context.mailbox.item as any;
 
   if (mode === 'compose') {
-    // In compose mode, Reply All is the same as Reply — prepend inline
     if (item && item.body && typeof item.body.prependAsync === 'function') {
-      item.body.prependAsync(
-        bodyToHtml(replyText),
-        { coercionType: Office.CoercionType.Html },
-      );
+      item.body.prependAsync(html, { coercionType: Office.CoercionType.Html });
     } else {
       throw new Error('Cannot insert reply — compose body is not accessible.');
     }
   } else {
-    // Read mode — open a Reply All window
     if (item && typeof item.displayReplyAllForm === 'function') {
-      item.displayReplyAllForm(bodyToHtml(replyText));
+      item.displayReplyAllForm(html);
     } else {
       throw new Error('Cannot open Reply All window. Please make sure an email is selected.');
     }
@@ -402,20 +391,34 @@ export function hasPreviousReply(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Style resolution
 // ---------------------------------------------------------------------------
 
-function bodyToHtml(text: string): string {
-  return text
-    .split('\n\n')
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('');
+/**
+ * Resolve the reply font style based on user settings.
+ *
+ * - 'match-original': extract font-family/size/color from the original email
+ *   HTML (works in both read and compose-reply modes where the body contains
+ *   the quoted original). Falls back to `null` when extraction fails.
+ * - 'plain': no styling, returns `null`.
+ */
+async function resolveReplyStyle(): Promise<import('../services/style-extractor').TextStyle | null> {
+  const mode = getSetting('replyStyleMode');
+  if (mode === 'plain') return null;
+
+  try {
+    const html = await getCurrentEmailBodyHtml();
+    return extractTextStyleFromHtml(html);
+  } catch {
+    return null;
+  }
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+/**
+ * Build the HTML body for a reply, applying the resolved style.
+ * Convenience wrapper combining resolveReplyStyle + buildStyledBodyHtml.
+ */
+async function buildReplyHtml(text: string): Promise<string> {
+  const style = await resolveReplyStyle();
+  return buildStyledBodyHtml(text, style);
 }
