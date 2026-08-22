@@ -80,8 +80,8 @@ export function getItemMode(): ItemMode {
 
 /**
  * Strip HTML tags from email content, preserving only the display text of
- * hyperlinks (discarding href targets).  This ensures the AI prompt receives
- * human-readable link text rather than raw, often very long, URLs.
+ * hyperlinks (discarding href targets) and paragraph line breaks.
+ * This ensures the AI prompt receives human-readable, well-structured text.
  */
 function emailHtmlToText(html: string): string {
   return html
@@ -89,6 +89,9 @@ function emailHtmlToText(html: string): string {
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     // <a> tags → keep display text only, drop href
     .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1')
+    // Block-level elements → newlines
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
     // Strip remaining tags
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
@@ -97,7 +100,12 @@ function emailHtmlToText(html: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
+    // Collapse multiple spaces within a line
+    .replace(/ +/g, ' ')
+    // Trim whitespace around newlines
+    .replace(/ *\n */g, '\n')
+    // Collapse 3+ consecutive newlines into 2 (single blank line)
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
