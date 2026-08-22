@@ -217,21 +217,21 @@ describe('generateReply language resolution', () => {
     language: 'auto',
   });
 
-  it('auto mode → uses language priority instruction', async () => {
+  it('auto mode → language is embedded in prompt line', async () => {
     mockGenerateText.mockResolvedValue('Reply body');
 
     await generateReply(options());
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('语言优先级：回复说明中指定的回复语言>auto');
+    expect(prompt).toContain('Language：auto,(unless overridden by explicit request in Reply instructions)');
   });
 
-  it('explicit language selection → used verbatim in priority', async () => {
+  it('explicit language selection → used verbatim in prompt', async () => {
     mockGenerateText.mockResolvedValue('保留原文案的回复');
 
     await generateReply({ ...options(), language: 'Chinese (Simplified)' });
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('语言优先级：回复说明中指定的回复语言>Chinese (Simplified)');
+    expect(prompt).toContain('Language：Chinese (Simplified),(unless overridden by explicit request in Reply instructions)');
   });
 });

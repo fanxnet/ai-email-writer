@@ -79,24 +79,37 @@ export function getItemMode(): ItemMode {
 // ---------------------------------------------------------------------------
 
 /**
+ * Strip HTML tags from email content, preserving only the display text of
+ * hyperlinks (discarding href targets).  This ensures the AI prompt receives
+ * human-readable link text rather than raw, often very long, URLs.
+ */
+function emailHtmlToText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    // <a> tags → keep display text only, drop href
+    .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1')
+    // Strip remaining tags
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Read the body of the currently open email as plain text.
+ * Internally fetches HTML and strips tags, so hyperlink display text is
+ * preserved while raw URLs are discarded.
  * Works in both Read and Compose modes.
  */
-export function getCurrentEmailBody(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const item = getItemOrThrow();
-
-    item.body.getAsync(
-      Office.CoercionType.Text,
-      (result: Office.AsyncResult<string>) => {
-        if (result.status === Office.AsyncResultStatus.Succeeded) {
-          resolve(result.value || '');
-        } else {
-          reject(new Error(`Failed to read email body: ${result.error?.message || 'Unknown error'}`));
-        }
-      },
-    );
-  });
+export async function getCurrentEmailBody(): Promise<string> {
+  const html = await getCurrentEmailBodyHtml();
+  return emailHtmlToText(html);
 }
 
 /**
@@ -406,23 +419,4 @@ function getCurrentUserContact(): EmailContact {
     name: profile?.displayName || '',
     email: profile?.emailAddress || '',
   };
-}
-
-/**
- * Strip basic HTML tags from a string to get plain text.
- * Used as a fallback when the API doesn't return plain text directly.
- */
-export function stripHtml(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
 }
