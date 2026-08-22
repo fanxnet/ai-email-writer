@@ -17,6 +17,7 @@ import { buildPrompt } from '../prompts/builder';
 import { DRAFT_EMAIL_PROMPT } from '../prompts/templates';
 import { getItemMode } from '../services/outlook';
 import { buildGoalText, buildRulesText, buildProfileText } from './settings';
+import { buildStyledBodyHtml } from '../services/style-extractor';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,7 +154,7 @@ export function copyToCompose(draft: string): void {
     // Prepend to body (preserves signature)
     if (item && item.body && typeof item.body.prependAsync === 'function') {
       item.body.prependAsync(
-        bodyToHtml(body),
+        buildStyledBodyHtml(body, null),
         { coercionType: Office.CoercionType.Html },
       );
     }
@@ -166,7 +167,7 @@ export function copyToCompose(draft: string): void {
     // Read mode — open a new compose window
     Office.context.mailbox.displayNewMessageForm({
       subject: subject,
-      htmlBody: bodyToHtml(body),
+      htmlBody: buildStyledBodyHtml(body, null),
     });
   }
 }
@@ -234,20 +235,3 @@ function parseSubjectAndBody(draft: string): { subject: string; body: string } {
   return { subject, body };
 }
 
-/**
- * Convert plain text body to basic HTML for the compose window.
- */
-function bodyToHtml(text: string): string {
-  return text
-    .split('\n\n')
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('');
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}

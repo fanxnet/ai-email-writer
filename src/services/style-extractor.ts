@@ -115,35 +115,38 @@ export function extractTextStyleFromHtml(html: string): TextStyle | null {
  * Build an HTML body string from plain text, wrapping each paragraph
  * in `<p>` tags with optional inline font styling.
  *
+ * Empty paragraphs (blank lines) in the source are filtered out.
+ * Paragraph-ending line breaks are preserved: `\n` inside each paragraph
+ * becomes `<br>`, and each paragraph is a separate `<p>` block.
+ *
  * This replaces the plain `bodyToHtml()` helper in draft-reply / draft-email.
  */
 export function buildStyledBodyHtml(text: string, style: TextStyle | null): string {
   if (!text) return '';
 
-  const paragraphs = text.split('\n\n');
+  const normalised = text.replace(/\r\n?/g, '\n');
+  const paragraphs = normalised.split('\n\n').filter((p) => p.trim().length > 0);
+  const attr = buildStyleAttr(style);
 
   return paragraphs
     .map((para) => {
-      // First pass: wrap lines inside the paragraph with <br>
-      const inner = escapeHtml(para)
-        .split('\n')
-        .join('<br>');
-
-      if (!style) {
-        return `<p>${inner}</p>`;
-      }
-
-      // Build inline style string
-      const parts: string[] = [];
-      if (style.fontFamily) parts.push(`font-family:${style.fontFamily}`);
-      if (style.fontSizePt) parts.push(`font-size:${style.fontSizePt}pt`);
-      if (style.color) parts.push(`color:${style.color}`);
-
-      return parts.length > 0
-        ? `<p style="${parts.join(';')}">${inner}</p>`
-        : `<p>${inner}</p>`;
+      const inner = escapeHtml(para).split('\n').join('<br>');
+      return `<p${attr}>${inner}</p>`;
     })
     .join('');
+}
+
+/**
+ * Build a ` style="..."` attribute string from a TextStyle, or empty
+ * string when the style is null or has no properties.
+ */
+function buildStyleAttr(style: TextStyle | null): string {
+  if (!style) return '';
+  const parts: string[] = [];
+  if (style.fontFamily) parts.push(`font-family:${style.fontFamily}`);
+  if (style.fontSizePt) parts.push(`font-size:${style.fontSizePt}pt`);
+  if (style.color) parts.push(`color:${style.color}`);
+  return parts.length > 0 ? ` style="${parts.join(';')}"` : '';
 }
 
 // ---------------------------------------------------------------------------

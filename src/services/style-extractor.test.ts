@@ -156,4 +156,24 @@ describe('buildStyledBodyHtml', () => {
       '<p style="font-family:Georgia;color:#333">Second</p>',
     );
   });
+
+  it('filters empty paragraphs (blank lines)', () => {
+    const result = buildStyledBodyHtml('Para 1\n\n\n\nPara 2', null);
+    expect(result).toBe('<p>Para 1</p><p>Para 2</p>');
+  });
+
+  it('filters leading empty paragraphs', () => {
+    const result = buildStyledBodyHtml('\n\nHello', null);
+    expect(result).toBe('<p>Hello</p>');
+  });
+
+  it('filters trailing empty paragraphs', () => {
+    const result = buildStyledBodyHtml('Hello\n\n', null);
+    expect(result).toBe('<p>Hello</p>');
+  });
+
+  it('normalises \\r\\n to \\n before processing', () => {
+    const result = buildStyledBodyHtml('A\r\n\r\nB', null);
+    expect(result).toBe('<p>A</p><p>B</p>');
+  });
 });
