@@ -113,67 +113,69 @@ describe('extractTextStyleFromHtml', () => {
 });
 
 describe('buildStyledBodyHtml', () => {
+  const M = 'margin:6pt 0';
+
   it('returns empty string for empty text', () => {
     expect(buildStyledBodyHtml('', null)).toBe('');
   });
 
   it('wraps paragraphs in <p> tags', () => {
     const result = buildStyledBodyHtml('Hello world', null);
-    expect(result).toBe('<p>Hello world</p>');
+    expect(result).toBe(`<p style="${M}">Hello world</p>`);
   });
 
   it('splits paragraphs on double newlines', () => {
     const result = buildStyledBodyHtml('Para 1\n\nPara 2', null);
-    expect(result).toBe('<p>Para 1</p><p>Para 2</p>');
+    expect(result).toBe(`<p style="${M}">Para 1</p><p style="${M}">Para 2</p>`);
   });
 
   it('converts single newlines to <br>', () => {
     const result = buildStyledBodyHtml('Line 1\nLine 2', null);
-    expect(result).toBe('<p>Line 1<br>Line 2</p>');
+    expect(result).toBe(`<p style="${M}">Line 1<br>Line 2</p>`);
   });
 
   it('applies inline style when style is provided', () => {
     const style = { fontFamily: 'calibri', fontSizePt: 12, color: '#000000' };
     const result = buildStyledBodyHtml('Hello', style);
-    expect(result).toBe('<p style="font-family:calibri;font-size:12pt;color:#000000">Hello</p>');
+    expect(result).toBe(`<p style="${M};font-family:calibri;font-size:12pt;color:#000000">Hello</p>`);
   });
 
   it('applies partial style (font-family only)', () => {
     const result = buildStyledBodyHtml('Hello', { fontFamily: 'Arial' });
-    expect(result).toBe('<p style="font-family:Arial">Hello</p>');
+    expect(result).toBe(`<p style="${M};font-family:Arial">Hello</p>`);
   });
 
   it('escapes HTML in input text', () => {
     const result = buildStyledBodyHtml('Use <b>bold</b> & "quotes"', null);
-    expect(result).toBe('<p>Use &lt;b&gt;bold&lt;/b&gt; &amp; &quot;quotes&quot;</p>');
+    expect(result).toBe(`<p style="${M}">Use &lt;b&gt;bold&lt;/b&gt; &amp; &quot;quotes&quot;</p>`);
   });
 
   it('handles multiple paragraphs with style', () => {
     const style = { fontFamily: 'Georgia', color: '#333' };
     const result = buildStyledBodyHtml('First\n\nSecond', style);
     expect(result).toBe(
-      '<p style="font-family:Georgia;color:#333">First</p>' +
-      '<p style="font-family:Georgia;color:#333">Second</p>',
+      `<p style="${M};font-family:Georgia;color:#333">First</p>` +
+      `<p style="${M};font-family:Georgia;color:#333">Second</p>`,
     );
   });
 
   it('filters empty paragraphs (blank lines)', () => {
     const result = buildStyledBodyHtml('Para 1\n\n\n\nPara 2', null);
-    expect(result).toBe('<p>Para 1</p><p>Para 2</p>');
+    expect(result).toBe(`<p style="${M}">Para 1</p><p style="${M}">Para 2</p>`);
   });
 
   it('filters leading empty paragraphs', () => {
     const result = buildStyledBodyHtml('\n\nHello', null);
-    expect(result).toBe('<p>Hello</p>');
+    expect(result).toBe(`<p style="${M}">Hello</p>`);
   });
 
   it('filters trailing empty paragraphs', () => {
     const result = buildStyledBodyHtml('Hello\n\n', null);
-    expect(result).toBe('<p>Hello</p>');
+    expect(result).toBe(`<p style="${M}">Hello</p>`);
   });
 
   it('normalises \\r\\n to \\n before processing', () => {
     const result = buildStyledBodyHtml('A\r\n\r\nB', null);
-    expect(result).toBe('<p>A</p><p>B</p>');
+    expect(result).toBe(`<p style="${M}">A</p><p style="${M}">B</p>`);
   });
 });

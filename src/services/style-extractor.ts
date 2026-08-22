@@ -141,12 +141,11 @@ export function buildStyledBodyHtml(text: string, style: TextStyle | null): stri
  * string when the style is null or has no properties.
  */
 function buildStyleAttr(style: TextStyle | null): string {
-  if (!style) return '';
-  const parts: string[] = [];
-  if (style.fontFamily) parts.push(`font-family:${style.fontFamily}`);
-  if (style.fontSizePt) parts.push(`font-size:${style.fontSizePt}pt`);
-  if (style.color) parts.push(`color:${style.color}`);
-  return parts.length > 0 ? ` style="${parts.join(';')}"` : '';
+  const parts: string[] = ['margin:6pt 0'];
+  if (style?.fontFamily) parts.push(`font-family:${style.fontFamily}`);
+  if (style?.fontSizePt) parts.push(`font-size:${style.fontSizePt}pt`);
+  if (style?.color) parts.push(`color:${style.color}`);
+  return ` style="${parts.join(';')}"`;
 }
 
 // ---------------------------------------------------------------------------

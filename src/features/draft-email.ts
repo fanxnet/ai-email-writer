@@ -15,9 +15,9 @@
 import { generateText } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { DRAFT_EMAIL_PROMPT } from '../prompts/templates';
-import { getItemMode } from '../services/outlook';
+import { getItemMode, getCurrentEmailBodyHtml } from '../services/outlook';
 import { buildGoalText, buildRulesText, buildProfileText } from './settings';
-import { buildStyledBodyHtml } from '../services/style-extractor';
+import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,34 +140,45 @@ Requirements:
  * Insert the generated draft into the current compose window (inline),
  * or open a new compose window if in read mode.
  *
- * In compose mode: sets the subject and body directly in the active editor.
+ * In compose mode: extracts the signature's font style from the current
+ * body, then prepends the styled draft above it.
  * In read mode: falls back to displayNewMessageForm (opens new window).
  */
-export function copyToCompose(draft: string): void {
+export async function copyToCompose(draft: string): Promise<void> {
   const { subject, body } = parseSubjectAndBody(draft);
   const mode = getItemMode();
 
+  // Extract font style from the compose body (signature with Outlook's
+  // auto-signature has inline styles; plain text does not).
+  let style: import('../services/style-extractor').TextStyle | null = null;
   if (mode === 'compose') {
-    // Insert directly into the active compose window
+    try {
+      const html = await getCurrentEmailBodyHtml();
+      style = extractTextStyleFromHtml(html);
+    } catch {
+      // Read failed — fall back to plain
+    }
+  }
+
+  const html = buildStyledBodyHtml(body, style);
+
+  if (mode === 'compose') {
     const item = Office.context.mailbox.item as any;
 
-    // Prepend to body (preserves signature)
-    if (item && item.body && typeof item.body.prependAsync === 'function') {
-      item.body.prependAsync(
-        buildStyledBodyHtml(body, null),
-        { coercionType: Office.CoercionType.Html },
-      );
+    // Prepend to body (preserves signature below the draft)
+    if (item?.body?.prependAsync) {
+      item.body.prependAsync(html, { coercionType: Office.CoercionType.Html });
     }
 
     // Set the subject inline (if the draft has one)
-    if (subject && item && item.subject && typeof item.subject.setAsync === 'function') {
+    if (subject && item?.subject?.setAsync) {
       item.subject.setAsync(subject);
     }
   } else {
     // Read mode — open a new compose window
     Office.context.mailbox.displayNewMessageForm({
       subject: subject,
-      htmlBody: buildStyledBodyHtml(body, null),
+      htmlBody: html,
     });
   }
 }
