@@ -59,7 +59,7 @@ export interface EmailContext {
 // ---------------------------------------------------------------------------
 
 /** Max tokens of original email to include in the reply prompt. */
-const MAX_CONTENT_TOKENS = 6000;
+const MAX_CONTENT_TOKENS = 3000;
 
 // ---------------------------------------------------------------------------
 // State
@@ -104,6 +104,48 @@ export function clearEmailContext(): void {
 }
 
 /**
+ * Filter quoted/replied content from email body text.
+ * Handles various email client formats including multi-line headers.
+ */
+function filterQuotedContent(text: string): string {
+  let result = text;
+
+  // Remove "On [date], [name] wrote:" patterns and everything after
+  // Handles: "On Mon, Jan 15, 2024 at 3:00 PM, Alice wrote:"
+  //          "On 2024年1月15日星期一 下午3:00，Alice 写道："
+  result = result.replace(/On\s+.{10,}?wrote\s*:/gi, '');
+  result = result.replace(/在\s+.{10,}?写道[：:]/gi, '');
+
+  // Remove multi-line "From:...\nSent:...\nTo:...\nSubject:..." blocks
+  // Uses [^\n]* to match within a line, and anchors to match the full block
+  result = result.replace(
+    /^From:.*(?:Sent|发送时间|Created|创建时间)[^\n]*\n[\s\S]*?(?:Subject|主题)[^\n]*\n/gim,
+    ''
+  );
+
+  // Remove single-line "From:...Sent:...To:...Subject:..." (compact format)
+  result = result.replace(
+    /^From:.*(?:Sent|发送时间):.*(?:To|收件人):.*(?:Subject|主题):.*$/gim,
+    ''
+  );
+
+  // Remove "> " prefixed quoted lines
+  result = result.replace(/^>.*$/gim, '');
+
+  // Remove quoted message separators and everything after
+  result = result.replace(/^-{3,}\s*(?:Original Message|原始邮件|Forwarded message|转发的消息)\s*-{3,}[\s\S]*/gi, '');
+  result = result.replace(/_{3,}\s*(?:Original Message|原始邮件|Forwarded message|转发的消息)\s*_{3,}[\s\S]*/gi, '');
+
+  // Remove Outlook Classic's "-----Original Message-----" format
+  result = result.replace(/-----+\s*(?:Original Message|原始邮件)\s*-----+[\s\S]*/gi, '');
+
+  // Clean up excessive blank lines
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  return result.trim();
+}
+
+/**
  * Generate a reply to the current email.
  */
 export async function generateReply(
@@ -124,15 +166,7 @@ export async function generateReply(
   // Filter thread context based on includeThread option
   let emailBody = context.body;
   if (!options.includeThread) {
-    // Remove quoted content patterns from email body
-    emailBody = emailBody
-      .replace(/On\s+\w+,\s+\w+\s+\d+,\s+\d+\s+at\s+\d+\s+[\s\S]*?wrote:/gi, '')
-      .replace(/From:.*(?:Sent|发送时间):.*(?:To|收件人):.*(?:Subject|主题):[\s\S]*$/gim, '')
-      .replace(/^-+\s*Original Message\s*-+$/gim, '')
-      .replace(/^-+\s*原始邮件\s*-+$/gim, '')
-      .replace(/^-+\s*Forwarded message\s*-+$/gim, '')
-      .replace(/^-+\s*转发的消息\s*-+$/gim, '')
-      .trim();
+    emailBody = filterQuotedContent(emailBody);
   }
 
   originalEmail += emailBody;

@@ -86,10 +86,10 @@ export function getItemMode(): ItemMode {
 function emailHtmlToText(html: string): string {
   return html
     // Remove quoted/replied content containers (thread history)
+    // Note: msonormal NOT filtered — Outlook Classic uses it for ALL content
     .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, '')
     .replace(/<div\s+class="gmail_quote"[\s\S]*?<\/div>/gi, '')
     .replace(/<div\s+id="gmail_quote"[\s\S]*?<\/div>/gi, '')
-    .replace(/<div\s+class="msonormal"[\s\S]*?<\/div>/gi, '')
     .replace(/<div\s+class="yahoo_quoted"[\s\S]*?<\/div>/gi, '')
     // Remove common quoted-message header lines
     .replace(/^-+\s*Original Message\s*-+$/gim, '')
