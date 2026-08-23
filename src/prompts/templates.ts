@@ -44,22 +44,27 @@ Requirements:
  *               {{REPLY_INSTRUCTIONS}}, {{TONE}}, {{LANGUAGE}},
  *               {{REPLY_TO_NAME}}, {{RULES}}
  */
-export const REPLY_PROMPT = `Role:As a professional email assistant;{{PROFILE}}
+export const REPLY_PROMPT = `[1.Base Requirements]
+Role:As a professional email assistant,{{PROFILE}}
 {{GOAL}}
-Requirements:
-- Tone: {{TONE}}
-- Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
-- Address the reply to: {{REPLY_TO_NAME}} 
-- Write only the reply body (no subject)
-- Reference relevant points from the original email naturally
-- Keep the reply focused and professional,no commentary outside the reply
-Here is the original email you are replying to:
+Tone: {{TONE}}
+Language：{{LANGUAGE}}
+Address the reply to: {{REPLY_TO_NAME}} 
+Write only the reply body (no subject).
+Reference relevant points from the original email naturally.
+Keep the reply focused and professional,no commentary outside the reply.
+{{RULES}}
+
+[2.Original Email]
 ---
 {{ORIGINAL_EMAIL}}
 ---
-Reply instructions: 
+
+[3.Reply Instructions (Follow this strictly)]
 {{REPLY_INSTRUCTIONS}}
-{{RULES}}`;
+
+[4.Execution Instruction]
+Draft the final reply based on the original email and the reply instructions. Unless explicitly required in the reply instructions, please follow the basic requirements. Unless explicitly required in the reply instructions, pls begin generating the reply body immediately`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread
