@@ -104,44 +104,81 @@ export function clearEmailContext(): void {
 }
 
 /**
- * Filter quoted/replied content from email body text.
- * Handles various email client formats including multi-line headers.
+ * Regex markers that indicate the start of quoted/replied history content.
+ * Patterns do NOT consume trailing content — matching position is used to cut.
+ * Header labels are localized for EN/ZH plus common European languages
+ * (FR/DE/ES/IT/PT); a generic label:value block marker covers other languages.
  */
-function filterQuotedContent(text: string): string {
+const QUOTE_MARKERS: RegExp[] = [
+  // "wrote:" equivalents (Gmail / Apple Mail / localized clients)
+  // EN: "On Mon, Jan 15, 2024 at 3:00 PM, Alice wrote:"
+  // FR: "Le 15 janvier 2024 à 15:00, Alice a écrit :"
+  // DE: "Am Montag, 15. Januar 2024 um 15:00 schrieb Alice:"
+  /(?:On|Le|Am|El|Il|Em|在)\s+.{10,}?\s*(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|写道)\s*[：:]/gi,
+  // Multi-line From/Sent/To/Subject header block (localized labels)
+  /^(?:From|发件人|De|Von|Da)\s*[：:][^\n]*\n(?:(?:To|收件人|À|An|Para|A|CC|Cc|抄送|Sent|发送时间|Envoyé le|Gesendet am|Enviado el|Inviato il|Enviada em|Date|日期|Datum|Fecha|Data|Importance|Wichtigkeit|Importancia|Importanza|Importância|Created|创建时间|Reply-To)\s*[：:][^\n]*\n)*(?:Subject|主题|Objet|Betreff|Asunto|Oggetto|Assunto)\s*[：:][^\n]*\n/gim,
+  // Generic language-neutral fallback: 3+ consecutive "Label: value" lines
+  // (same-line value, short lines) — catches languages not in the alias table.
+  /^(?:[^\s:：]{1,30}[：:][ \t]+[^\n]{1,200}\n){3,}/gm,
+  // Single-line compact format
+  /^From:.*(?:Sent|发送时间):.*(?:To|收件人):.*(?:Subject|主题):.*$/gim,
+  // Quoted-message separators (localized)
+  /^-{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|Forwarded message|Message transféré|Weitergeleitete Nachricht|Mensaje reenviado|Messaggio inoltrato|Mensagem encaminhada|转发的消息)\s*-{3,}/gi,
+  /_{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|Forwarded message|Message transféré|Weitergeleitete Nachricht|Mensaje reenviado|Messaggio inoltrato|Mensagem encaminhada|转发的消息)\s*_{3,}/gi,
+  /-----+\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件)\s*-----+/gi,
+];
+
+/**
+ * Find the index where quoted/history content starts.
+ * Returns -1 when no quoted content is found, or when the only marker sits at
+ * the very top of the body (e.g. a forwarded email that begins with a
+ * "From:...Sent:...To:...Subject:..." block). Such a body is the message's own
+ * content, so it is preserved rather than stripped.
+ */
+function findQuotedStart(text: string): number {
+  let earliest = -1;
+  for (const re of QUOTE_MARKERS) {
+    re.lastIndex = 0;
+    const m = re.exec(text);
+    if (m && text.slice(0, m.index).trim().length > 0) {
+      if (earliest === -1 || m.index < earliest) {
+        earliest = m.index;
+      }
+    }
+  }
+  return earliest;
+}
+
+/**
+ * Filter quoted/replied content from email body text.
+ * Handles Classic Outlook, Outlook Web, and Gmail quoted-content formats.
+ * Exposed for unit testing.
+ */
+export function filterQuotedContent(text: string): string {
   let result = text;
 
-  // Remove "On [date], [name] wrote:" patterns and everything after
-  // Handles: "On Mon, Jan 15, 2024 at 3:00 PM, Alice wrote:"
-  //          "On 2024年1月15日星期一 下午3:00，Alice 写道："
-  result = result.replace(/On\s+.{10,}?wrote\s*:/gi, '');
-  result = result.replace(/在\s+.{10,}?写道[：:]/gi, '');
+  // 1) Remove standalone separator lines (underscores/dashes) — Classic Outlook
+  result = result.replace(/^[_-]{3,}\s*$/gm, '\n');
 
-  // Remove multi-line "From:\nSent:\nTo:\nSubject:" blocks (Outlook Classic)
-  // and single-line "From:...Sent:...To:...Subject:..." (compact format)
-  // Also removes everything after the Subject line (quoted message body)
-  // Supports both half-width (:) and full-width (：) colons for Chinese headers
+  // 2) Merge header-label-only lines with the following value line
+  //    "From:\nAlice" → "From: Alice" (language-neutral)
   result = result.replace(
-    /^(?:From|发件人)[：:][^\n]*\n(?:(?:To|CC|Sent|发送时间|Created|创建时间|收件人|抄送)[：:][^\n]*\n)*(?:Subject|主题)[：:][^\n]*\n[\s\S]*/gim,
-    ''
+    /^([^\s:：]{1,30})[：:]\s*\n(?=\S)/gim,
+    '$1: '
   );
 
-  // Remove single-line "From:...Sent:...To:...Subject:..." (compact format)
-  result = result.replace(
-    /^From:.*(?:Sent|发送时间):.*(?:To|收件人):.*(?:Subject|主题):.*$/gim,
-    ''
-  );
+  // 3) Cut everything from the first quoted-content marker onward, but ONLY
+  //    when the marker is preceded by real content (reply-email pattern).
+  //    Markers at the very top (e.g. forwarded email) are preserved.
+  const quoteStart = findQuotedStart(result);
+  if (quoteStart > 0) {
+    result = result.slice(0, quoteStart);
+  }
 
-  // Remove "> " prefixed quoted lines
-  result = result.replace(/^>.*$/gim, '');
+  // 4) Remove "> " prefixed quoted lines (line-by-line, safe)
+  result = result.replace(/^>.*$/gm, '');
 
-  // Remove quoted message separators and everything after
-  result = result.replace(/^-{3,}\s*(?:Original Message|原始邮件|Forwarded message|转发的消息)\s*-{3,}[\s\S]*/gi, '');
-  result = result.replace(/_{3,}\s*(?:Original Message|原始邮件|Forwarded message|转发的消息)\s*_{3,}[\s\S]*/gi, '');
-
-  // Remove Outlook Classic's "-----Original Message-----" format
-  result = result.replace(/-----+\s*(?:Original Message|原始邮件)\s*-----+[\s\S]*/gi, '');
-
-  // Clean up excessive blank lines
+  // 5) Clean up excessive blank lines
   result = result.replace(/\n{3,}/g, '\n\n');
 
   return result.trim();

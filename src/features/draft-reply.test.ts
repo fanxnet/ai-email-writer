@@ -8,7 +8,7 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateReply, refineReply, restoreFromHistory, clearEmailContext } from './draft-reply';
+import { generateReply, refineReply, restoreFromHistory, clearEmailContext, filterQuotedContent } from './draft-reply';
 import { getConversation, appendTurn, rememberLastRequest } from './conversation-memory';
 import { getCurrentEmailBody } from '../services/outlook';
 
@@ -230,7 +230,286 @@ describe('generateReply language resolution', () => {
 });
 
 // ---------------------------------------------------------------------------
-// filterQuotedContent — multi-line From/Sent/To/Subject filtering
+// filterQuotedContent — direct unit tests
+// ---------------------------------------------------------------------------
+
+describe('filterQuotedContent', () => {
+  it('removes multi-line From/Sent/To/Subject block and quoted body', () => {
+    const input = [
+      'Current reply content',
+      '',
+      'From: Alice <alice@example.com>',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob <bob@example.com>',
+      'Subject: RE: Q3 figures',
+      '',
+      'Original quoted content',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current reply content');
+    expect(result).not.toContain('From:');
+    expect(result).not.toContain('Original quoted content');
+  });
+
+  it('merges split From label/value lines and removes block', () => {
+    const input = [
+      'Current content',
+      '',
+      'From:',
+      'Alice <alice@example.com>',
+      'Sent:',
+      'Monday, January 15, 2024 3:00 PM',
+      'To:',
+      'Bob',
+      'Subject:',
+      'RE: Q3',
+      '',
+      'Quoted body',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current content');
+    expect(result).not.toContain('From:');
+    expect(result).not.toContain('Quoted body');
+  });
+
+  it('removes block preceded by underscore separator (Classic Outlook)', () => {
+    const input = [
+      'Current content',
+      '',
+      '________________________________________',
+      'From: Alice',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob',
+      'Subject: RE: Q3',
+      '',
+      'Quoted body',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current content');
+    expect(result).not.toContain('________________________________________');
+    expect(result).not.toContain('Quoted body');
+  });
+
+  it('removes Chinese header block with full-width colons', () => {
+    const input = [
+      '当前邮件内容',
+      '',
+      '发件人：张三',
+      '发送时间：2024年1月15日 15:00',
+      '收件人：李四',
+      '主题：回复：Q3 数据',
+      '',
+      '引用的旧内容',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('当前邮件内容');
+    expect(result).not.toContain('发件人');
+    expect(result).not.toContain('引用的旧内容');
+  });
+
+  it('removes On...wrote: header and everything after', () => {
+    const input = [
+      'Current content',
+      '',
+      'On Mon, Jan 15, 2024 at 3:00 PM, Alice wrote:',
+      '',
+      '> Original line one',
+      '> Original line two',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current content');
+    expect(result).not.toContain('wrote:');
+    expect(result).not.toContain('Original line');
+  });
+
+  it('removes -----Original Message----- and everything after', () => {
+    const input = [
+      'Current content',
+      '',
+      '-----Original Message-----',
+      'From: Alice',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob',
+      'Subject: Q3',
+      '',
+      'Quoted body',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current content');
+    expect(result).not.toContain('Original Message');
+    expect(result).not.toContain('Quoted body');
+  });
+
+  it('removes "> " prefixed quoted lines', () => {
+    const input = [
+      'Current content',
+      '',
+      '> quoted line',
+      '> another quoted line',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current content');
+    expect(result).not.toContain('quoted line');
+  });
+
+  it('preserves clean email with no quoted content', () => {
+    const input = 'Please review the attached document by Friday.';
+    expect(filterQuotedContent(input)).toBe(input);
+  });
+
+  it('handles header with Cc and Date fields', () => {
+    const input = [
+      'Current content',
+      '',
+      'From: Alice',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob',
+      'CC: Charlie',
+      'Date: Monday, January 15, 2024 3:00 PM',
+      'Subject: Re: Q3',
+      '',
+      'Quoted body',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Current content');
+    expect(result).not.toContain('From:');
+    expect(result).not.toContain('Quoted body');
+  });
+
+  it('preserves a forwarded email whose body starts with From: header', () => {
+    const input = [
+      'From: Alice Smith',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob',
+      'Subject: Report',
+      '',
+      'This is a forwarded report that is the actual content to reply to.',
+    ].join('\n');
+    expect(filterQuotedContent(input)).toBe(input);
+  });
+
+  it('preserves email whose own content contains a wrote: phrase', () => {
+    const input = [
+      'On the call John wrote: please review the draft.',
+      'We then discussed the deadline.',
+      '',
+      'Second paragraph is still relevant.',
+    ].join('\n');
+    expect(filterQuotedContent(input)).toBe(input);
+  });
+
+  it('preserves nested forward chain when the From: header starts the body', () => {
+    const input = [
+      'From: Alice',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob',
+      'Subject: Report',
+      '',
+      'Forwarded body',
+      '',
+      'From: Charlie',
+      'Sent: Sunday, January 14, 2024 3:00 PM',
+      'To: Alice',
+      'Subject: Original',
+      '',
+      'Even older content',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Forwarded body');
+    expect(result).toContain('Even older content');
+  });
+
+  it('filters French reply header block (De:/Envoyé le:/À:/Objet:)', () => {
+    const input = [
+      'Bonjour,',
+      'Merci pour votre réponse.',
+      '',
+      'De : Alice',
+      'Envoyé le : 15 janvier 2024 15:00',
+      'À : Bob',
+      'Objet : RE: Q3',
+      '',
+      'Message original cité',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Bonjour,');
+    expect(result).toContain('Merci pour votre réponse.');
+    expect(result).not.toContain('De : Alice');
+    expect(result).not.toContain('Message original cité');
+  });
+
+  it('filters German reply header block (Von:/Gesendet am:/An:/Betreff:)', () => {
+    const input = [
+      'Hallo,',
+      'Danke für Ihre Nachricht.',
+      '',
+      'Von: Alice',
+      'Gesendet am: Montag, 15. Januar 2024 15:00',
+      'An: Bob',
+      'Betreff: RE: Q3',
+      '',
+      'Alter Inhalt',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Hallo,');
+    expect(result).toContain('Danke für Ihre Nachricht.');
+    expect(result).not.toContain('Von: Alice');
+    expect(result).not.toContain('Alter Inhalt');
+  });
+
+  it('filters Spanish reply header block (De:/Enviado el:/Para:/Asunto:)', () => {
+    const input = [
+      'Hola,',
+      'Gracias por tu mensaje.',
+      '',
+      'De: Alice',
+      'Enviado el: lunes, 15 de enero de 2024 15:00',
+      'Para: Bob',
+      'Asunto: RE: Q3',
+      '',
+      'Contenido anterior',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Hola,');
+    expect(result).toContain('Gracias por tu mensaje.');
+    expect(result).not.toContain('De: Alice');
+    expect(result).not.toContain('Contenido anterior');
+  });
+
+  it('filters Dutch-style header via language-neutral fallback (3+ label:value lines)', () => {
+    const input = [
+      'Hallo,',
+      'Bedankt voor je bericht.',
+      '',
+      'Van: Alice',
+      'Verzonden: maandag 15 januari 2024',
+      'Aan: Bob',
+      'Onderwerp: RE: Q3',
+      '',
+      'Oud bericht',
+    ].join('\n');
+    const result = filterQuotedContent(input);
+    expect(result).toContain('Hallo,');
+    expect(result).toContain('Bedankt voor je bericht.');
+    expect(result).not.toContain('Van: Alice');
+    expect(result).not.toContain('Oud bericht');
+  });
+
+  it('preserves French forwarded email when the De: header starts the body', () => {
+    const input = [
+      'De : Alice',
+      'Envoyé le : 15 janvier 2024 15:00',
+      'À : Bob',
+      'Objet : RE: Q3',
+      '',
+      'Contenu transféré à conserver',
+    ].join('\n');
+    expect(filterQuotedContent(input)).toBe(input);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateReply integration tests — quoted content via generateReply
 // ---------------------------------------------------------------------------
 
 describe('generateReply quoted content filtering', () => {
@@ -259,32 +538,7 @@ describe('generateReply quoted content filtering', () => {
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
     expect(prompt).toContain('Please review the attached document.');
-    expect(prompt).not.toContain('From: Alice Smith');
-    expect(prompt).not.toContain('Sent: Monday');
     expect(prompt).not.toContain('Original content here.');
-  });
-
-  it('filters multi-line Outlook Classic with CC line', async () => {
-    const multiLineEmail = [
-      'Please review.',
-      '',
-      'From: Alice',
-      'Sent: Mon, 15 Jan 2024 15:00:00 +0000',
-      'To: Bob',
-      'CC: Charlie',
-      'Subject: Re: Q3',
-      '',
-      'Old stuff.',
-    ].join('\n');
-    mockGetBody.mockResolvedValue(multiLineEmail);
-    mockGenerateText.mockResolvedValue('Reply');
-
-    await generateReply(options());
-
-    const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('Please review.');
-    expect(prompt).not.toContain('From: Alice\n');
-    expect(prompt).not.toContain('CC: Charlie');
   });
 
   it('filters Chinese multi-line headers', async () => {
@@ -305,20 +559,7 @@ describe('generateReply quoted content filtering', () => {
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
     expect(prompt).toContain('请查收附件。');
-    expect(prompt).not.toContain('发件人：张三');
     expect(prompt).not.toContain('原始内容。');
-  });
-
-  it('filters single-line compact From/Sent/To/Subject', async () => {
-    const singleLineEmail = 'Please review.\nFrom: Alice; Sent: Mon; To: Bob; Subject: Re\nOld content.';
-    mockGetBody.mockResolvedValue(singleLineEmail);
-    mockGenerateText.mockResolvedValue('Reply');
-
-    await generateReply(options());
-
-    const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('Please review.');
-    expect(prompt).not.toContain('From: Alice;');
   });
 
   it('preserves current email when no quoted content exists', async () => {

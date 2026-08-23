@@ -83,7 +83,7 @@ export function getItemMode(): ItemMode {
  * hyperlinks (discarding href targets) and paragraph line breaks.
  * This ensures the AI prompt receives human-readable, well-structured text.
  */
-function emailHtmlToText(html: string): string {
+export function emailHtmlToText(html: string): string {
   return html
     // Remove quoted/replied content containers (thread history)
     // Note: msonormal NOT filtered — Outlook Classic uses it for ALL content
@@ -98,6 +98,7 @@ function emailHtmlToText(html: string): string {
     .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1')
     // Block-level elements → newlines
     .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<hr\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
     // Strip remaining tags
     .replace(/<[^>]+>/g, ' ')
@@ -107,6 +108,18 @@ function emailHtmlToText(html: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    // Decode common Latin accented entities (localized quoted headers)
+    .replace(/&eacute;/g, 'é').replace(/&Eacute;/g, 'É')
+    .replace(/&egrave;/g, 'è').replace(/&Egrave;/g, 'È')
+    .replace(/&agrave;/g, 'à').replace(/&Agrave;/g, 'À')
+    .replace(/&auml;/g, 'ä').replace(/&Auml;/g, 'Ä')
+    .replace(/&uuml;/g, 'ü').replace(/&Uuml;/g, 'Ü')
+    .replace(/&ouml;/g, 'ö').replace(/&Ouml;/g, 'Ö')
+    .replace(/&iacute;/g, 'í').replace(/&Iacute;/g, 'Í')
+    .replace(/&oacute;/g, 'ó').replace(/&Oacute;/g, 'Ó')
+    .replace(/&uacute;/g, 'ú').replace(/&Uacute;/g, 'Ú')
+    .replace(/&ccedil;/g, 'ç').replace(/&Ccedil;/g, 'Ç')
+    .replace(/&ntilde;/g, 'ñ').replace(/&Ntilde;/g, 'Ñ')
     // Collapse multiple spaces within a line
     .replace(/ +/g, ' ')
     // Trim whitespace around newlines
