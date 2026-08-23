@@ -53,18 +53,15 @@ Address the reply to: {{REPLY_TO_NAME}}
 Write only the reply body (without subject,regards and signature).
 Reference relevant points from the original email naturally.
 Keep the reply focused and professional,no commentary outside the reply.
-{{RULES}}
 
 [2.Original Email]
----
 {{ORIGINAL_EMAIL}}
----
 
 [3.Reply Instructions]
 {{REPLY_INSTRUCTIONS}}
 
 [4.Execution Instruction]
-Unless explicitly required in the reply instructions, please follow the basic requirements and base on the original email. draft the final reply body according to the reply instructions strictly.`;
+Unless explicitly required in the reply instructions, please follow the basic requirements and refer to the original email, draft the final reply body according to the reply instructions strictly.`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread
