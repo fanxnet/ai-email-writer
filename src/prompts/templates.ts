@@ -57,8 +57,8 @@ Here is the original email you are replying to:
 ---
 {{ORIGINAL_EMAIL}}
 ---
-{{CONVERSATION_CONTEXT}}
-Reply instructions: {{REPLY_INSTRUCTIONS}}
+Reply instructions: 
+{{REPLY_INSTRUCTIONS}}
 {{RULES}}`;
 
 // ---------------------------------------------------------------------------

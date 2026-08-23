@@ -28,14 +28,7 @@ import {
 } from '../services/outlook';
 import { getSessionKey } from './auto-save';
 import {
-  appendTurn,
-  buildReplyContext,
-  buildReplyContextText,
-  buildEmailRef,
   getConversation,
-  getEmailContextBlock,
-  compactIfNeeded,
-  rememberLastRequest,
   getLastAssistantReply,
 } from './conversation-memory';
 
@@ -130,24 +123,6 @@ export async function generateReply(
   // Resolve language: use the dropdown value, or 'auto' by default
   const language = options.language || 'auto';
 
-  // Conversation context is optional; when disabled the reply is generated
-  // from the current email only and nothing is recorded.
-  const memoryEnabled = getSetting('conversationContextEnabled');
-
-  // Long emails are summarized once and cached per email ref
-  const emailBlock = memoryEnabled
-    ? (await getEmailContextBlock(
-        sessionKey,
-        buildEmailRef(context.subject, context.body),
-        originalEmail,
-      )).text
-    : originalEmail;
-
-  // Inject bounded conversation memory (summary + recent turns)
-  const memoryText = memoryEnabled
-    ? buildReplyContextText(buildReplyContext(sessionKey))
-    : '';
-
   // Build Goal, Profile, and Rules as separate prompt sections
   const goalText = options.goalText || '';
   const profileText = buildProfileText();
@@ -156,8 +131,7 @@ export async function generateReply(
   const prompt = buildPrompt(REPLY_PROMPT, {
     PROFILE: profileText,
     GOAL: goalText,
-    ORIGINAL_EMAIL: emailBlock,
-    CONVERSATION_CONTEXT: memoryText,
+    ORIGINAL_EMAIL: originalEmail,
     REPLY_INSTRUCTIONS: options.instructions,
     TONE: options.tone || 'professional',
     LANGUAGE: language,
@@ -175,21 +149,6 @@ export async function generateReply(
   lastReplyOptions = { ...options };
   lastReply = reply;
 
-  // Record the exchange; remember the request for later Regenerate; compact
-  // older turns (best-effort, never blocks) — skipped when context is off
-  if (memoryEnabled) {
-    appendTurn(sessionKey, 'user', options.instructions);
-    appendTurn(sessionKey, 'assistant', reply);
-    rememberLastRequest(sessionKey, {
-      instructions: options.instructions,
-      tone: options.tone || 'professional',
-      includeOriginal: options.includeOriginal !== false,
-      language: options.language,
-      reasoningMode: options.reasoningMode,
-    });
-    void compactIfNeeded(sessionKey);
-  }
-
   return reply;
 }
 
@@ -201,8 +160,6 @@ export async function generateReply(
  * Returns `null` when the conversation has no reply to restore.
  */
 export function restoreFromHistory(key: string): { reply: string; options: DraftReplyOptions } | null {
-  if (!getSetting('conversationContextEnabled')) return null;
-
   const record = getConversation(key);
   if (record.entries.length === 0) return null;
 
@@ -277,14 +234,6 @@ Requirements:
     reasoningMode: lastReplyOptions?.reasoningMode,
     onStream,
   });
-
-  // Record the refinement round so later turns can reference it
-  const sessionKey = getSessionKey();
-  if (getSetting('conversationContextEnabled')) {
-    appendTurn(sessionKey, 'user', refinement);
-    appendTurn(sessionKey, 'assistant', refined);
-    void compactIfNeeded(sessionKey);
-  }
 
   lastReply = refined;
   return refined;

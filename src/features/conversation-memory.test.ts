@@ -144,8 +144,8 @@ describe('appendTurn', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildReplyContext', () => {
-  it('returns only the recent window plus the summary', () => {
-    // 3 Q&A pairs (6 entries)
+  it('returns up to 5 recent turns (WINDOW_TURNS=5)', () => {
+    // 3 Q&A pairs (6 entries) - all fit within the 5-turn window
     for (let i = 1; i <= 3; i++) {
       appendTurn('k4', 'user', `question ${i}`);
       appendTurn('k4', 'assistant', `reply ${i}`);
@@ -155,6 +155,19 @@ describe('buildReplyContext', () => {
     expect(block.recent).toContain('You: question 3');
     expect(block.recent).toContain('Assistant: reply 3');
     expect(block.recent).toContain('You: question 2');
+    expect(block.recent).toContain('question 1');
+  });
+
+  it('returns only the 5 most recent turns when history exceeds 5 turns', () => {
+    // 6 Q&A pairs (12 entries) - only last 5 turns shown
+    for (let i = 1; i <= 6; i++) {
+      appendTurn('k4b', 'user', `question ${i}`);
+      appendTurn('k4b', 'assistant', `reply ${i}`);
+    }
+
+    const block = buildReplyContext('k4b');
+    expect(block.recent).toContain('You: question 6');
+    expect(block.recent).toContain('Assistant: reply 6');
     expect(block.recent).not.toContain('question 1');
   });
 
@@ -199,9 +212,9 @@ describe('buildReplyContext', () => {
 // ---------------------------------------------------------------------------
 
 describe('compactIfNeeded', () => {
-  it('folds older turns into a summary only once enough old turns accumulate', async () => {
+  it('does nothing - AI compression is disabled', async () => {
     mockGenerateText.mockResolvedValue('compacted summary');
-    // 10 Q&A pairs (20 entries) → 16 older turns fold into the summary
+    // 10 Q&A pairs (20 entries)
     for (let i = 1; i <= 10; i++) {
       appendTurn('k6', 'user', `question ${i}`);
       appendTurn('k6', 'assistant', `reply ${i}`);
@@ -210,9 +223,9 @@ describe('compactIfNeeded', () => {
     await compactIfNeeded('k6');
 
     const rec = getConversation('k6');
-    expect(rec.entries).toHaveLength(4); // last 2 turn pairs
-    expect(rec.summary).toBe('compacted summary');
-    expect(rec.entries[3].content).toBe('reply 10');
+    expect(rec.entries).toHaveLength(20); // All entries remain (no compaction)
+    expect(rec.summary).toBe(''); // No summary generated
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
   it('does not compact until the accumulated older turns reach the threshold', async () => {
@@ -308,22 +321,14 @@ describe('rememberLastRequest / getLastAssistantReply', () => {
 describe('getEmailContextBlock', () => {
   const LONG = 'x'.repeat(10000);
 
-  it('summarizes long emails once and caches by ref', async () => {
-    mockGenerateText.mockResolvedValueOnce('EMAIL SUMMARY');
+  it('returns the original text directly (AI summary is disabled)', async () => {
     const first = await getEmailContextBlock('k9', 'ref-A', LONG);
-    expect(first.text).toBe('EMAIL SUMMARY');
+    expect(first.text).toBe(LONG);
+    expect(mockGenerateText).not.toHaveBeenCalled();
 
     const second = await getEmailContextBlock('k9', 'ref-A', LONG);
-    expect(second.text).toBe('EMAIL SUMMARY');
-    expect(mockGenerateText).toHaveBeenCalledTimes(1);
-  });
-
-  it('regenerates the summary when the email ref changes', async () => {
-    mockGenerateText.mockResolvedValueOnce('SUMMARY 1').mockResolvedValueOnce('SUMMARY 2');
-    await getEmailContextBlock('k10', 'ref-1', LONG);
-    const second = await getEmailContextBlock('k10', 'ref-2', LONG);
-    expect(second.text).toBe('SUMMARY 2');
-    expect(mockGenerateText).toHaveBeenCalledTimes(2);
+    expect(second.text).toBe(LONG);
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
   it('returns short emails verbatim without a summary call', async () => {
@@ -333,10 +338,11 @@ describe('getEmailContextBlock', () => {
     expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
-  it('falls back to the original text when summarization fails', async () => {
-    mockGenerateText.mockRejectedValue(new Error('boom'));
-    const result = await getEmailContextBlock('k12', 'ref-L', LONG);
-    expect(result.text).toBe(LONG);
+  it('always returns original text even if ref changes', async () => {
+    await getEmailContextBlock('k10', 'ref-1', LONG);
+    const second = await getEmailContextBlock('k10', 'ref-2', LONG);
+    expect(second.text).toBe(LONG);
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 });
 

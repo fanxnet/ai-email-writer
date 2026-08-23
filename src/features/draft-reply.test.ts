@@ -83,7 +83,7 @@ describe('generateReply conversation memory', () => {
     expect(prompt).not.toContain('Conversation so far on this email');
   });
 
-  it('injects the previous exchange into the follow-up prompt', async () => {
+  it('does not inject conversation context into the follow-up prompt', async () => {
     mockGenerateText.mockResolvedValueOnce('Reply copy one');
     await generateReply(options());
 
@@ -92,11 +92,11 @@ describe('generateReply conversation memory', () => {
 
     const prompt = mockGenerateText.mock.calls[1][0] as string;
     expect(prompt).toContain('Make it friendlier');
-    expect(prompt).toContain('Conversation so far on this email');
-    expect(prompt).toContain('Reply copy one');
+    expect(prompt).not.toContain('Conversation so far on this email');
+    expect(prompt).toContain('quarterly figures'); // Original email still injected
   });
 
-  it('records both Q&A rounds for the conversation', async () => {
+  it('does not record history in localStorage (AI compression disabled)', async () => {
     mockGenerateText.mockResolvedValueOnce('Reply copy one');
     await generateReply(options());
 
@@ -104,13 +104,7 @@ describe('generateReply conversation memory', () => {
     await generateReply({ ...options(), instructions: 'Follow-up question' });
 
     const rec = getConversation(SESSION_KEY);
-    expect(rec.entries).toHaveLength(4);
-    expect(rec.entries.map((e) => e.content)).toEqual([
-      'Draft a reply',
-      'Reply copy one',
-      'Follow-up question',
-      'Reply copy two',
-    ]);
+    expect(rec.entries).toHaveLength(0); // No history recorded
   });
 
   it('does not duplicate history when regenerating with the same instructions', async () => {
@@ -121,8 +115,7 @@ describe('generateReply conversation memory', () => {
     await generateReply(options()); // same instructions → treated as regenerate
 
     const rec = getConversation(SESSION_KEY);
-    expect(rec.entries).toHaveLength(2);
-    expect(rec.entries[1].content).toBe('Regenerated');
+    expect(rec.entries).toHaveLength(0); // No history recorded
   });
 
   it('does not write history when generation fails', async () => {
@@ -136,7 +129,7 @@ describe('generateReply conversation memory', () => {
 });
 
 describe('refineReply conversation memory', () => {
-  it('records refinement rounds and leaves prior drafts recallable', async () => {
+  it('does not record refinement rounds (AI compression disabled)', async () => {
     mockGenerateText.mockResolvedValueOnce('Draft reply body');
     await generateReply({
       instructions: 'Draft the reply',
@@ -148,9 +141,7 @@ describe('refineReply conversation memory', () => {
     await refineReply('Make the closing shorter');
 
     const rec = getConversation(SESSION_KEY);
-    expect(rec.entries).toHaveLength(4);
-    expect(rec.entries[2]).toMatchObject({ role: 'user', content: 'Make the closing shorter' });
-    expect(rec.entries[3]).toMatchObject({ role: 'assistant', content: 'Refined reply body' });
+    expect(rec.entries).toHaveLength(0); // No history recorded
   });
 });
 
@@ -162,15 +153,12 @@ describe('restoreFromHistory', () => {
     language: 'auto',
   });
 
-  it('restores the latest reply and the request that produced it', async () => {
+  it('returns null when generateReply does not record history (AI compression disabled)', async () => {
     mockGenerateText.mockResolvedValueOnce('Reply copy one');
     await generateReply(options());
 
     const restored = restoreFromHistory(SESSION_KEY);
-    expect(restored).not.toBeNull();
-    expect(restored!.reply).toBe('Reply copy one');
-    expect(restored!.options.instructions).toBe('Draft a reply');
-    expect(restored!.options.tone).toBe('professional');
+    expect(restored).toBeNull(); // No history recorded by generateReply
   });
 
   it('restores a stored record as if returning to the email after a reload', () => {

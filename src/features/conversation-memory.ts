@@ -74,8 +74,8 @@ const MAX_RECORDS = 50;
 /** Hard cap on the serialized store size (≈1 MB, ~20% of localStorage quota). */
 const BUDGET_CHARS = 1_000_000;
 
-/** Number of most-recent turns injected verbatim into prompts (turn pair = 2). */
-const WINDOW_TURNS = 2;
+/** Number of most-recent turns to display (turn pair = 2, so 5 turns = 5 entries). */
+const WINDOW_TURNS = 5;
 
 /** When a record holds more entries than this, older ones become a summary. */
 const COMPACT_AFTER = 16;
@@ -339,78 +339,25 @@ export function buildEmailRef(subject: string, body: string): string {
 }
 
 /**
- * Get the email text to embed in a reply prompt. Long emails (beyond
- * LONG_EMAIL_CHARS) are summarized once per email ref and cached; shorter
- * emails are returned verbatim.
+ * Get the email text to embed in a reply prompt.
+ * DISABLED — AI summary removed to save tokens. Always returns the original text.
  */
 export async function getEmailContextBlock(
-  key: string,
+  _key: string,
   emailRef: string,
   emailText: string,
 ): Promise<EmailContextBlock> {
-  const store = sweep(loadStore());
-  const record = store[key];
-
-  if (record?.emailSummary?.ref === emailRef) {
-    return { text: record.emailSummary.content, ref: emailRef };
-  }
-
-  if (emailText.length <= LONG_EMAIL_CHARS) {
-    return { text: emailText, ref: emailRef };
-  }
-
-  try {
-    const prompt = `Summarize this email in a few concise sentences for an AI that must write a reply. Keep every key fact: participants, dates, numbers, requests, and action items. Preserve the overall tone. Return only the summary, no preamble.\n\n---\n${emailText}`;
-    const content = await generateText(prompt, {
-      temperature: 0.2,
-      maxOutputTokens: EMAIL_SUMMARY_MAX_TOKENS,
-    });
-
-    if (shouldPersist(key)) {
-      const updated = record ? cloneRecord(record) : emptyRecord(key);
-      updated.emailSummary = { ref: emailRef, content };
-      updated.updatedAt = Date.now();
-      store[key] = updated;
-      saveStore(sweep(store));
-    }
-    return { text: content, ref: emailRef };
-  } catch {
-    // Summary generation failed — fall back to the (truncated) original text
-    return { text: emailText, ref: emailRef };
-  }
+  // AI summary disabled — always return the original text
+  return { text: emailText, ref: emailRef };
 }
 
 /**
  * Fold older turns into a model-written summary when a conversation grows
- * past COMPACT_AFTER entries. On failure this silently degrades to
- * recent-window-only memory. Best-effort; callers should not await strictly.
+ * past COMPACT_AFTER entries. DISABLED — AI compression removed to save tokens.
  */
-export async function compactIfNeeded(key: string): Promise<void> {
-  const store = sweep(loadStore());
-  const record = store[key];
-  if (!shouldPersist(key) || !record || record.entries.length <= COMPACT_AFTER) return;
-
-  const older = record.entries.slice(0, record.entries.length - WINDOW_TURNS * 2);
-  // Frequency control: only fold when enough new older turns have
-  // accumulated since the last compaction (≈ every 10 interactions), so a
-  // single generation does not trigger a compaction round every time.
-  if (older.length < COMPACT_AFTER) return;
-
-  try {
-    const prompt = buildCompactionPrompt(record.summary, older);
-    const summary = await generateText(prompt, {
-      temperature: 0.2,
-      maxOutputTokens: SUMMARY_MAX_TOKENS,
-    });
-
-    record.summary = summary;
-    record.entries = record.entries.slice(-WINDOW_TURNS * 2);
-    record.updatedAt = Date.now();
-    store[key] = record;
-    saveStore(sweep(store));
-  } catch {
-    // Fail silently — memory degrades to the recent-window only
-  }
+export async function compactIfNeeded(_key: string): Promise<void> {
+  // AI compression disabled — conversation history is stored as-is
+  return;
 }
 
 // ---------------------------------------------------------------------------
