@@ -96,7 +96,7 @@ describe('generateReply conversation memory', () => {
     expect(prompt).toContain('quarterly figures'); // Original email still injected
   });
 
-  it('does not record history in localStorage (AI compression disabled)', async () => {
+  it('records history in localStorage for local display only', async () => {
     mockGenerateText.mockResolvedValueOnce('Reply copy one');
     await generateReply(options());
 
@@ -104,7 +104,7 @@ describe('generateReply conversation memory', () => {
     await generateReply({ ...options(), instructions: 'Follow-up question' });
 
     const rec = getConversation(SESSION_KEY);
-    expect(rec.entries).toHaveLength(0); // No history recorded
+    expect(rec.entries).toHaveLength(4); // History recorded for local display
   });
 
   it('does not duplicate history when regenerating with the same instructions', async () => {
@@ -115,7 +115,7 @@ describe('generateReply conversation memory', () => {
     await generateReply(options()); // same instructions → treated as regenerate
 
     const rec = getConversation(SESSION_KEY);
-    expect(rec.entries).toHaveLength(0); // No history recorded
+    expect(rec.entries).toHaveLength(2);
   });
 
   it('does not write history when generation fails', async () => {
@@ -129,7 +129,7 @@ describe('generateReply conversation memory', () => {
 });
 
 describe('refineReply conversation memory', () => {
-  it('does not record refinement rounds (AI compression disabled)', async () => {
+  it('records refinement rounds for local display', async () => {
     mockGenerateText.mockResolvedValueOnce('Draft reply body');
     await generateReply({
       instructions: 'Draft the reply',
@@ -141,7 +141,9 @@ describe('refineReply conversation memory', () => {
     await refineReply('Make the closing shorter');
 
     const rec = getConversation(SESSION_KEY);
-    expect(rec.entries).toHaveLength(0); // No history recorded
+    expect(rec.entries).toHaveLength(4);
+    expect(rec.entries[2]).toMatchObject({ role: 'user', content: 'Make the closing shorter' });
+    expect(rec.entries[3]).toMatchObject({ role: 'assistant', content: 'Refined reply body' });
   });
 });
 
@@ -153,12 +155,15 @@ describe('restoreFromHistory', () => {
     language: 'auto',
   });
 
-  it('returns null when generateReply does not record history (AI compression disabled)', async () => {
+  it('restores the latest reply and the request that produced it', async () => {
     mockGenerateText.mockResolvedValueOnce('Reply copy one');
     await generateReply(options());
 
     const restored = restoreFromHistory(SESSION_KEY);
-    expect(restored).toBeNull(); // No history recorded by generateReply
+    expect(restored).not.toBeNull();
+    expect(restored!.reply).toBe('Reply copy one');
+    expect(restored!.options.instructions).toBe('Draft a reply');
+    expect(restored!.options.tone).toBe('professional');
   });
 
   it('restores a stored record as if returning to the email after a reload', () => {

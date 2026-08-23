@@ -50,7 +50,7 @@ Role:As a professional email assistant,{{PROFILE}}
 Tone: {{TONE}}
 Language：{{LANGUAGE}}
 Address the reply to: {{REPLY_TO_NAME}} 
-Write only the reply body (no subject).
+Write only the reply body (without subject,regards and signature).
 Reference relevant points from the original email naturally.
 Keep the reply focused and professional,no commentary outside the reply.
 {{RULES}}
@@ -60,11 +60,11 @@ Keep the reply focused and professional,no commentary outside the reply.
 {{ORIGINAL_EMAIL}}
 ---
 
-[3.Reply Instructions (Follow this strictly)]
+[3.Reply Instructions]
 {{REPLY_INSTRUCTIONS}}
 
 [4.Execution Instruction]
-Draft the final reply based on the original email and the reply instructions. Unless explicitly required in the reply instructions, please follow the basic requirements. Unless explicitly required in the reply instructions, pls begin generating the reply body immediately`;
+Unless explicitly required in the reply instructions, please follow the basic requirements and base on the original email. draft the final reply body according to the reply instructions strictly.`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread

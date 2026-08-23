@@ -28,8 +28,10 @@ import {
 } from '../services/outlook';
 import { getSessionKey } from './auto-save';
 import {
+  appendTurn,
   getConversation,
   getLastAssistantReply,
+  rememberLastRequest,
 } from './conversation-memory';
 
 // ---------------------------------------------------------------------------
@@ -149,6 +151,17 @@ export async function generateReply(
   lastReplyOptions = { ...options };
   lastReply = reply;
 
+  // Record the exchange for local storage only (not injected into prompts)
+  appendTurn(sessionKey, 'user', options.instructions);
+  appendTurn(sessionKey, 'assistant', reply);
+  rememberLastRequest(sessionKey, {
+    instructions: options.instructions,
+    tone: options.tone || 'professional',
+    includeOriginal: options.includeOriginal !== false,
+    language: options.language,
+    reasoningMode: options.reasoningMode,
+  });
+
   return reply;
 }
 
@@ -234,6 +247,11 @@ Requirements:
     reasoningMode: lastReplyOptions?.reasoningMode,
     onStream,
   });
+
+  // Record the refinement round for local storage only
+  const sessionKey = getSessionKey();
+  appendTurn(sessionKey, 'user', refinement);
+  appendTurn(sessionKey, 'assistant', refined);
 
   lastReply = refined;
   return refined;
