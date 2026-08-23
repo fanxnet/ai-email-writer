@@ -228,3 +228,107 @@ describe('generateReply language resolution', () => {
     expect(prompt).toContain('Language：Chinese (Simplified)');
   });
 });
+
+// ---------------------------------------------------------------------------
+// filterQuotedContent — multi-line From/Sent/To/Subject filtering
+// ---------------------------------------------------------------------------
+
+describe('generateReply quoted content filtering', () => {
+  const options = () => ({
+    instructions: 'Draft a reply',
+    tone: 'professional',
+    includeOriginal: true,
+    language: 'auto',
+  });
+
+  it('filters multi-line Outlook Classic From/Sent/To/Subject block', async () => {
+    const multiLineEmail = [
+      'Please review the attached document.',
+      '',
+      'From: Alice Smith',
+      'Sent: Monday, January 15, 2024 3:00 PM',
+      'To: Bob',
+      'Subject: Re: Q3 figures',
+      '',
+      'Original content here.',
+    ].join('\n');
+    mockGetBody.mockResolvedValue(multiLineEmail);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('Please review the attached document.');
+    expect(prompt).not.toContain('From: Alice Smith');
+    expect(prompt).not.toContain('Sent: Monday');
+    expect(prompt).not.toContain('Original content here.');
+  });
+
+  it('filters multi-line Outlook Classic with CC line', async () => {
+    const multiLineEmail = [
+      'Please review.',
+      '',
+      'From: Alice',
+      'Sent: Mon, 15 Jan 2024 15:00:00 +0000',
+      'To: Bob',
+      'CC: Charlie',
+      'Subject: Re: Q3',
+      '',
+      'Old stuff.',
+    ].join('\n');
+    mockGetBody.mockResolvedValue(multiLineEmail);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('Please review.');
+    expect(prompt).not.toContain('From: Alice\n');
+    expect(prompt).not.toContain('CC: Charlie');
+  });
+
+  it('filters Chinese multi-line headers', async () => {
+    const chineseEmail = [
+      '请查收附件。',
+      '',
+      '发件人：张三',
+      '发送时间：2024年1月15日 15:00',
+      '收件人：李四',
+      '主题：回复：Q3 数据',
+      '',
+      '原始内容。',
+    ].join('\n');
+    mockGetBody.mockResolvedValue(chineseEmail);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('请查收附件。');
+    expect(prompt).not.toContain('发件人：张三');
+    expect(prompt).not.toContain('原始内容。');
+  });
+
+  it('filters single-line compact From/Sent/To/Subject', async () => {
+    const singleLineEmail = 'Please review.\nFrom: Alice; Sent: Mon; To: Bob; Subject: Re\nOld content.';
+    mockGetBody.mockResolvedValue(singleLineEmail);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('Please review.');
+    expect(prompt).not.toContain('From: Alice;');
+  });
+
+  it('preserves current email when no quoted content exists', async () => {
+    const cleanEmail = 'Hi, please review the attached document by Friday.';
+    mockGetBody.mockResolvedValue(cleanEmail);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('Hi, please review the attached document by Friday.');
+  });
+});

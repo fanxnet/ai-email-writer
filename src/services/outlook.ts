@@ -91,11 +91,6 @@ function emailHtmlToText(html: string): string {
     .replace(/<div\s+class="gmail_quote"[\s\S]*?<\/div>/gi, '')
     .replace(/<div\s+id="gmail_quote"[\s\S]*?<\/div>/gi, '')
     .replace(/<div\s+class="yahoo_quoted"[\s\S]*?<\/div>/gi, '')
-    // Remove common quoted-message header lines
-    .replace(/^-+\s*Original Message\s*-+$/gim, '')
-    .replace(/^-+\s*原始邮件\s*-+$/gim, '')
-    .replace(/^-+\s*Forwarded message\s*-+$/gim, '')
-    .replace(/^-+\s*转发的消息\s*-+$/gim, '')
     // Remove existing logic
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')

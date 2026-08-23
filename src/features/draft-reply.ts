@@ -116,10 +116,12 @@ function filterQuotedContent(text: string): string {
   result = result.replace(/On\s+.{10,}?wrote\s*:/gi, '');
   result = result.replace(/在\s+.{10,}?写道[：:]/gi, '');
 
-  // Remove multi-line "From:...\nSent:...\nTo:...\nSubject:..." blocks
-  // Uses [^\n]* to match within a line, and anchors to match the full block
+  // Remove multi-line "From:\nSent:\nTo:\nSubject:" blocks (Outlook Classic)
+  // and single-line "From:...Sent:...To:...Subject:..." (compact format)
+  // Also removes everything after the Subject line (quoted message body)
+  // Supports both half-width (:) and full-width (：) colons for Chinese headers
   result = result.replace(
-    /^From:.*(?:Sent|发送时间|Created|创建时间)[^\n]*\n[\s\S]*?(?:Subject|主题)[^\n]*\n/gim,
+    /^(?:From|发件人)[：:][^\n]*\n(?:(?:To|CC|Sent|发送时间|Created|创建时间|收件人|抄送)[：:][^\n]*\n)*(?:Subject|主题)[：:][^\n]*\n[\s\S]*/gim,
     ''
   );
 
