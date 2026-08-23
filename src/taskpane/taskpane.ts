@@ -742,11 +742,13 @@ async function handleGenerateReply(): Promise<void> {
   const goal = ($('reply-goal') as HTMLSelectElement)?.value || 'none';
   const customGoal = ($('reply-goal-custom') as HTMLInputElement)?.value || '';
   const goalText = buildGoalText(goal, customGoal);
+  const includeThread = ($('reply-include-thread') as HTMLInputElement)?.checked ?? false;
 
   const options: DraftReplyOptions = {
     instructions,
     tone, includeOriginal: true, language, reasoningMode,
     goalText,
+    includeThread,
   };
 
   hideError();

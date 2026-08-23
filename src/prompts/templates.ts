@@ -18,12 +18,8 @@
  * Placeholders: {{PROFILE}}, {{GOAL}}, {{INSTRUCTIONS}}, {{TONE}},
  *               {{LANGUAGE}}, {{RULES}}
  */
-export const DRAFT_EMAIL_PROMPT = `Role:As a professional email assistant;{{PROFILE}}
+export const DRAFT_EMAIL_PROMPT = `Role:As a professional email assistant,{{PROFILE}}
 {{GOAL}}
-Draft a complete email based on the following instructions:
-
-{{INSTRUCTIONS}}
-
 Requirements:
 - Tone: {{TONE}}
 - Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
@@ -31,7 +27,10 @@ Requirements:
 - Use an appropriate greeting
 - Keep the email concise and to the point
 - Do not add any commentary outside the email itself
-{{RULES}}`;
+{{RULES}}
+
+Draft a complete email based on the following instructions:
+{{INSTRUCTIONS}}`;
 
 // ---------------------------------------------------------------------------
 // Reply
@@ -43,6 +42,7 @@ Requirements:
  * Placeholders: {{PROFILE}}, {{GOAL}}, {{ORIGINAL_EMAIL}},
  *               {{REPLY_INSTRUCTIONS}}, {{TONE}}, {{LANGUAGE}},
  *               {{REPLY_TO_NAME}}, {{RULES}}
+ *discard {{RULES}}
  */
 export const REPLY_PROMPT = `[1.Base Requirements]
 Role:As a professional email assistant,{{PROFILE}}

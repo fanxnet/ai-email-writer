@@ -45,6 +45,7 @@ export interface DraftReplyOptions {
   language?: string;
   reasoningMode?: ReasoningMode;
   goalText?: string;
+  includeThread?: boolean;
 }
 
 export interface EmailContext {
@@ -119,7 +120,22 @@ export async function generateReply(
   // Build the original email string for the prompt (pre-truncated for safety)
   let originalEmail = `From: ${context.sender.name} <${context.sender.email}>\n`;
   originalEmail += `Subject: ${context.subject}\n\n`;
-  originalEmail += context.body;
+
+  // Filter thread context based on includeThread option
+  let emailBody = context.body;
+  if (!options.includeThread) {
+    // Remove quoted content patterns from email body
+    emailBody = emailBody
+      .replace(/On\s+\w+,\s+\w+\s+\d+,\s+\d+\s+at\s+\d+\s+[\s\S]*?wrote:/gi, '')
+      .replace(/From:.*(?:Sent|发送时间):.*(?:To|收件人):.*(?:Subject|主题):[\s\S]*$/gim, '')
+      .replace(/^-+\s*Original Message\s*-+$/gim, '')
+      .replace(/^-+\s*原始邮件\s*-+$/gim, '')
+      .replace(/^-+\s*Forwarded message\s*-+$/gim, '')
+      .replace(/^-+\s*转发的消息\s*-+$/gim, '')
+      .trim();
+  }
+
+  originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
   // Resolve language: use the dropdown value, or 'auto' by default

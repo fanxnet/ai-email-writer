@@ -553,12 +553,18 @@
         </div>
 
         <div class="mb-lg">
-          <!-- Conversation toolbar: context toggle + Show/Hide/Clear dropdown -->
+          <!-- Conversation toolbar: thread toggle + context toggle + Show/Hide/Clear dropdown -->
           <div class="flex items-center justify-between mb-xs">
-            <label class="aic-checkbox">
-              <input id="conversation-context-toggle" type="checkbox" checked />
-              <span>Context</span>
-            </label>
+            <div class="flex items-center gap-sm">
+              <label class="aic-checkbox">
+                <input id="reply-include-thread" type="checkbox" />
+                <span>Thread</span>
+              </label>
+              <label class="aic-checkbox">
+                <input id="conversation-context-toggle" type="checkbox" checked />
+                <span>Context</span>
+              </label>
+            </div>
             <div id="conversation-control" class="aic-split relative flex items-center gap-[2px]">
               <button
                 id="btn-conversation-toggle"

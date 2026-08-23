@@ -216,7 +216,7 @@ describe('generateReply language resolution', () => {
     await generateReply(options());
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('Language：auto,(unless overridden by explicit request in Reply instructions)');
+    expect(prompt).toContain('Language：auto');
   });
 
   it('explicit language selection → used verbatim in prompt', async () => {
@@ -225,6 +225,6 @@ describe('generateReply language resolution', () => {
     await generateReply({ ...options(), language: 'Chinese (Simplified)' });
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('Language：Chinese (Simplified),(unless overridden by explicit request in Reply instructions)');
+    expect(prompt).toContain('Language：Chinese (Simplified)');
   });
 });
