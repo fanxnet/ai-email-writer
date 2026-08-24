@@ -32,6 +32,7 @@ import {
   loadEmailContext,
   clearEmailContext,
   restoreFromHistory,
+  filterQuotedContent,
   DraftReplyOptions,
 } from '../features/draft-reply';
 import {
@@ -856,7 +857,7 @@ async function handleSuggestReplies(): Promise<void> {
     const { getEmailContext } = await import('../features/draft-reply');
     const context = await getEmailContext();
 
-    const emailSummary = `From: ${context.sender.name} <${context.sender.email}>\nSubject: ${context.subject}\n\n${context.body}`.slice(0, 2000);
+    const emailSummary = `From: ${context.sender.name} <${context.sender.email}>\nSubject: ${context.subject}\n\n${filterQuotedContent(context.body)}`.slice(0, 2000);
 
     const isDouble = ($('reply-double') as HTMLInputElement)?.checked;
     const wordRange = isDouble ? '10-24' : '5-12';

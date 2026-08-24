@@ -57,10 +57,10 @@ Keep the reply focused and professional,no commentary outside the reply.
 [2.Original Email]
 {{ORIGINAL_EMAIL}}
 
-[3.Reply Instructions]
+[3.Reply Instructions(strictly)]
 {{REPLY_INSTRUCTIONS}}
 
-[4.Execution Instruction]
+[4.Execution Instructions]
 Unless explicitly required in the reply instructions, please follow the basic requirements and refer to the original email, draft the final reply body according to the reply instructions strictly.`;
 
 // ---------------------------------------------------------------------------

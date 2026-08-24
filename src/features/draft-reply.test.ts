@@ -10,20 +10,26 @@
 
 import { generateReply, refineReply, restoreFromHistory, clearEmailContext, filterQuotedContent } from './draft-reply';
 import { getConversation, appendTurn, rememberLastRequest } from './conversation-memory';
-import { getCurrentEmailBody } from '../services/outlook';
+import { getCurrentEmailBodyHtml } from '../services/outlook';
 
 jest.mock('../services/ai-service', () => ({ generateText: jest.fn() }));
-jest.mock('../services/outlook', () => ({
-  getCurrentEmailBody: jest.fn().mockResolvedValue('We need the quarterly figures by Friday. Please confirm your availability for a review meeting.'),
-  getCurrentEmailSubject: jest.fn().mockResolvedValue('Q3 figures'),
-  getOriginalSender: jest.fn().mockResolvedValue({ name: 'Alice', email: 'alice@example.com' }),
-}));
+jest.mock('../services/outlook', () => {
+  const actual = jest.requireActual('../services/outlook');
+  return {
+    ...actual,
+    getCurrentEmailBodyHtml: jest.fn().mockResolvedValue(
+      '<p>We need the quarterly figures by Friday. Please confirm your availability for a review meeting.</p>',
+    ),
+    getCurrentEmailSubject: jest.fn().mockResolvedValue('Q3 figures'),
+    getOriginalSender: jest.fn().mockResolvedValue({ name: 'Alice', email: 'alice@example.com' }),
+  };
+});
 jest.mock('./auto-save', () => ({ getSessionKey: jest.fn().mockReturnValue('conv:integration') }));
 
 import { generateText as generateTextMockValue } from '../services/ai-service';
 
 const mockGenerateText = generateTextMockValue as jest.Mock;
-const mockGetBody = getCurrentEmailBody as jest.Mock;
+const mockGetHtml = getCurrentEmailBodyHtml as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // localStorage mock (node test env)
@@ -57,7 +63,9 @@ beforeEach(() => {
   (globalThis as any).localStorage = new MemoryStorage();
   mockGenerateText.mockReset();
   clearEmailContext();
-  mockGetBody.mockResolvedValue('We need the quarterly figures by Friday. Please confirm your availability for a review meeting.');
+  mockGetHtml.mockResolvedValue(
+    '<p>We need the quarterly figures by Friday. Please confirm your availability for a review meeting.</p>',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -521,17 +529,17 @@ describe('generateReply quoted content filtering', () => {
   });
 
   it('filters multi-line Outlook Classic From/Sent/To/Subject block', async () => {
-    const multiLineEmail = [
-      'Please review the attached document.',
-      '',
-      'From: Alice Smith',
-      'Sent: Monday, January 15, 2024 3:00 PM',
-      'To: Bob',
-      'Subject: Re: Q3 figures',
-      '',
-      'Original content here.',
-    ].join('\n');
-    mockGetBody.mockResolvedValue(multiLineEmail);
+    const multiLineHtml = [
+      '<html><body>',
+      '<p>Please review the attached document.</p>',
+      '<p>From: Alice Smith</p>',
+      '<p>Sent: Monday, January 15, 2024 3:00 PM</p>',
+      '<p>To: Bob</p>',
+      '<p>Subject: Re: Q3 figures</p>',
+      '<p>Original content here.</p>',
+      '</body></html>',
+    ].join('');
+    mockGetHtml.mockResolvedValue(multiLineHtml);
     mockGenerateText.mockResolvedValue('Reply');
 
     await generateReply(options());
@@ -542,17 +550,17 @@ describe('generateReply quoted content filtering', () => {
   });
 
   it('filters Chinese multi-line headers', async () => {
-    const chineseEmail = [
-      '请查收附件。',
-      '',
-      '发件人：张三',
-      '发送时间：2024年1月15日 15:00',
-      '收件人：李四',
-      '主题：回复：Q3 数据',
-      '',
-      '原始内容。',
-    ].join('\n');
-    mockGetBody.mockResolvedValue(chineseEmail);
+    const chineseHtml = [
+      '<html><body>',
+      '<p>请查收附件。</p>',
+      '<p>发件人：张三</p>',
+      '<p>发送时间：2024年1月15日 15:00</p>',
+      '<p>收件人：李四</p>',
+      '<p>主题：回复：Q3 数据</p>',
+      '<p>原始内容。</p>',
+      '</body></html>',
+    ].join('');
+    mockGetHtml.mockResolvedValue(chineseHtml);
     mockGenerateText.mockResolvedValue('Reply');
 
     await generateReply(options());
@@ -562,9 +570,54 @@ describe('generateReply quoted content filtering', () => {
     expect(prompt).not.toContain('原始内容。');
   });
 
+  it('truncates a long blockquote thread to the newest messages before building the prompt', async () => {
+    const threadHtml = [
+      '<html><body>',
+      '<p>Current email body.</p>',
+      '<blockquote><p>Reply 1 body.</p>',
+      '<blockquote><p>Reply 2 body.</p>',
+      '<blockquote><p>Reply 3 body.</p>',
+      '<blockquote><p>Reply 4 body (oldest).</p>',
+      '</blockquote></blockquote></blockquote></blockquote>',
+      '</body></html>',
+    ].join('');
+    mockGetHtml.mockResolvedValue(threadHtml);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply(options());
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('Current email body.');
+    expect(prompt).toContain('Reply 1 body.');
+    expect(prompt).toContain('Reply 2 body.');
+    expect(prompt).not.toContain('Reply 3 body.');
+    expect(prompt).not.toContain('Reply 4 body');
+  });
+
+  it('includes the full thread when includeThread is enabled', async () => {
+    const threadHtml = [
+      '<html><body>',
+      '<p>Current email body.</p>',
+      '<blockquote><p>Reply 1 body.</p>',
+      '<blockquote><p>Reply 2 body.</p>',
+      '<blockquote><p>Reply 3 body.</p>',
+      '</blockquote></blockquote></blockquote>',
+      '</body></html>',
+    ].join('');
+    mockGetHtml.mockResolvedValue(threadHtml);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply({ ...options(), includeThread: true });
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('Current email body.');
+    expect(prompt).toContain('Reply 1 body.');
+    expect(prompt).toContain('Reply 3 body.');
+  });
+
   it('preserves current email when no quoted content exists', async () => {
-    const cleanEmail = 'Hi, please review the attached document by Friday.';
-    mockGetBody.mockResolvedValue(cleanEmail);
+    const cleanHtml = '<html><body><p>Hi, please review the attached document by Friday.</p></body></html>';
+    mockGetHtml.mockResolvedValue(cleanHtml);
     mockGenerateText.mockResolvedValue('Reply');
 
     await generateReply(options());

@@ -19,13 +19,14 @@ import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
 import {
-  getCurrentEmailBody,
   getCurrentEmailBodyHtml,
   getCurrentEmailSubject,
   getOriginalSender,
   getItemMode,
+  emailHtmlToText,
   EmailContact,
 } from '../services/outlook';
+import { truncateHtmlThread } from '../services/thread-truncate';
 import { getSessionKey } from './auto-save';
 import {
   appendTurn,
@@ -51,6 +52,7 @@ export interface DraftReplyOptions {
 export interface EmailContext {
   subject: string;
   body: string;
+  bodyHtml?: string;
   sender: EmailContact;
 }
 
@@ -60,6 +62,12 @@ export interface EmailContext {
 
 /** Max tokens of original email to include in the reply prompt. */
 const MAX_CONTENT_TOKENS = 3000;
+
+/**
+ * How many most-recent messages to keep when the thread is truncated before
+ * building the reply prompt (the current email plus the newest N-1 replies).
+ */
+const KEEP_REPLIES = 3;
 
 // ---------------------------------------------------------------------------
 // State
@@ -75,16 +83,23 @@ let cachedContext: EmailContext | null = null;
 
 /**
  * Read the current email context (subject, body, sender).
- * Caches the result to avoid re-reading for regenerate/refine.
+ * Reads the raw HTML once and derives the plain-text body from it, so the
+ * reply pipeline can re-process the HTML (thread truncation) without a second
+ * Office round-trip. Caches the result to avoid re-reading for regenerate/refine.
  */
 export async function loadEmailContext(): Promise<EmailContext> {
-  const [body, subject, sender] = await Promise.all([
-    getCurrentEmailBody(),
+  const [bodyHtml, subject, sender] = await Promise.all([
+    getCurrentEmailBodyHtml(),
     getCurrentEmailSubject(),
     getOriginalSender(),
   ]);
 
-  cachedContext = { subject, body, sender };
+  cachedContext = {
+    subject,
+    body: emailHtmlToText(bodyHtml),
+    bodyHtml,
+    sender,
+  };
   return cachedContext;
 }
 
@@ -202,10 +217,17 @@ export async function generateReply(
   let originalEmail = `From: ${context.sender.name} <${context.sender.email}>\n`;
   originalEmail += `Subject: ${context.subject}\n\n`;
 
-  // Filter thread context based on includeThread option
-  let emailBody = context.body;
-  if (!options.includeThread) {
-    emailBody = filterQuotedContent(emailBody);
+  // Resolve the body to include based on the Thread toggle:
+  // - Thread off (default): truncate the raw HTML to the newest KEEP_REPLIES
+  //   messages first (structural, client-agnostic), then convert to text and
+  //   run the text-level quoted-content filter as a secondary guard.
+  // - Thread on: keep the full conversation, preserving quoted containers.
+  let emailBody: string;
+  if (options.includeThread) {
+    emailBody = emailHtmlToText(context.bodyHtml ?? '', { stripQuoted: false });
+  } else {
+    const truncatedHtml = truncateHtmlThread(context.bodyHtml ?? '', KEEP_REPLIES);
+    emailBody = filterQuotedContent(emailHtmlToText(truncatedHtml));
   }
 
   originalEmail += emailBody;

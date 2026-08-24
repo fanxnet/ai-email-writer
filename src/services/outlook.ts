@@ -83,14 +83,21 @@ export function getItemMode(): ItemMode {
  * hyperlinks (discarding href targets) and paragraph line breaks.
  * This ensures the AI prompt receives human-readable, well-structured text.
  */
-export function emailHtmlToText(html: string): string {
-  return html
-    // Remove quoted/replied content containers (thread history)
-    // Note: msonormal NOT filtered — Outlook Classic uses it for ALL content
-    .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, '')
-    .replace(/<div\s+class="gmail_quote"[\s\S]*?<\/div>/gi, '')
-    .replace(/<div\s+id="gmail_quote"[\s\S]*?<\/div>/gi, '')
-    .replace(/<div\s+class="yahoo_quoted"[\s\S]*?<\/div>/gi, '')
+export function emailHtmlToText(
+  html: string,
+  options: { stripQuoted?: boolean } = {},
+): string {
+  let text = html;
+  // Remove quoted/replied content containers (thread history)
+  // Note: msonormal NOT filtered — Outlook Classic uses it for ALL content
+  if (options.stripQuoted !== false) {
+    text = text
+      .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, '')
+      .replace(/<div\s+class="gmail_quote"[\s\S]*?<\/div>/gi, '')
+      .replace(/<div\s+id="gmail_quote"[\s\S]*?<\/div>/gi, '')
+      .replace(/<div\s+class="yahoo_quoted"[\s\S]*?<\/div>/gi, '');
+  }
+  return text
     // Remove existing logic
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
