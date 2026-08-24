@@ -61,7 +61,7 @@ Keep the reply focused and professional,no commentary outside the reply.
 {{REPLY_INSTRUCTIONS}}
 
 [4.Execution Instructions]
-Unless explicitly required in the reply instructions, please follow the basic requirements and refer to the original email, draft the final reply body according to the reply instructions strictly.`;
+请参考原始邮件内容,遵循基本要求(除非回复说明中另有明确要求),重点围绕回复说明,起草回复.`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread
