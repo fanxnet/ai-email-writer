@@ -343,12 +343,7 @@ export async function refineReply(
   }
 
   if (!refinement || !refinement.trim()) {
-//    throw new Error('Please enter your refinement instructions.');
-  if (!options.instructions || !options.instructions.trim()) {
     throw new Error('Please enter your refinement or reply instructions.');
-  } else {
-//  redirect reply instructions if no refinement instructions.
-    refinement = options.instructions;}
   }
 
   const prompt = `You are a professional writing assistant.
