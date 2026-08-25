@@ -75,7 +75,6 @@ Keep the reply focused and professional,no commentary outside the reply.
 export const SUMMARIZE_THREAD_PROMPT = `You are a professional email assistant.
 
 Summarize the following email thread:
-
 ---
 {{EMAIL_THREAD}}
 ---

@@ -61,7 +61,7 @@ export interface EmailContext {
 // ---------------------------------------------------------------------------
 
 /** Max tokens of original email to include in the reply prompt. */
-const MAX_CONTENT_TOKENS = 3000;
+const MAX_CONTENT_TOKENS = 6000;
 
 /**
  * How many most-recent messages to keep when the thread is truncated before
@@ -224,7 +224,10 @@ export async function generateReply(
   // - Thread on: keep the full conversation, preserving quoted containers.
   let emailBody: string;
   if (options.includeThread) {
-    emailBody = emailHtmlToText(context.bodyHtml ?? '', { stripQuoted: false });
+  // include Thread completely
+  //     emailBody = emailHtmlToText(context.bodyHtml ?? '', { stripQuoted: false });
+    const truncatedHtml = truncateHtmlThread(context.bodyHtml ?? '', 9);
+    emailBody = filterQuotedContent(emailHtmlToText(truncatedHtml));
   } else {
     const truncatedHtml = truncateHtmlThread(context.bodyHtml ?? '', KEEP_REPLIES);
     emailBody = filterQuotedContent(emailHtmlToText(truncatedHtml));
@@ -233,8 +236,14 @@ export async function generateReply(
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
-  // Resolve language: use the dropdown value, or 'auto' by default
-  const language = options.language || 'auto';
+  // Resolve language: 'auto' means match the original email's language
+  let language: string;
+  if (!options.language || options.language === 'auto') {
+  language = 'the same language as the original email';
+  } else {
+  language = options.language;
+  }
+
 
   // Build Goal, Profile, and Rules as separate prompt sections
   const goalText = options.goalText || '';
@@ -334,23 +343,26 @@ export async function refineReply(
   }
 
   if (!refinement || !refinement.trim()) {
-    throw new Error('Please enter your refinement instructions.');
+//    throw new Error('Please enter your refinement instructions.');
+  if (!options.instructions || !options.instructions.trim()) {
+    throw new Error('Please enter your refinement or reply instructions.');
+  }
+//  share reply instructions without refinement
+    refinement = options.instructions;
   }
 
   const prompt = `You are a professional email assistant.
+Requirements:
+- Keep the same general format (without signature)
+- Apply the requested changes while maintaining quality
+- Return only the revised reply, no explanations
 
 Here is the current draft reply:
-
 ---
 ${lastReply}
 ---
 
-Please revise the reply based on these instructions: ${refinement}
-
-Requirements:
-- Keep the same general format (greeting, body, sign-off)
-- Apply the requested changes while maintaining quality
-- Return only the revised reply, no explanations`;
+Please revise the draft reply based on these instructions:${refinement}`;
 
   const refined = await generateText(prompt, {
     temperature: 0.6,

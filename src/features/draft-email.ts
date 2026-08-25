@@ -112,19 +112,17 @@ export async function refineDraft(
   }
 
   const prompt = `You are a professional email assistant.
+Requirements:
+- Keep the same general format (Subject line on first line, greeting, body, sign-off)
+- Apply the requested changes while maintaining quality
+- Return only the revised email, no explanations
 
 Here is the current draft email:
-
 ---
 ${lastDraft}
 ---
 
-Please revise the draft based on these instructions: ${refinement}
-
-Requirements:
-- Keep the same general format (Subject line on first line, greeting, body, sign-off)
-- Apply the requested changes while maintaining quality
-- Return only the revised email, no explanations`;
+Please revise the draft email based on these instructions: ${refinement}`;
 
   const refined = await generateText(prompt, {
     temperature: 0.6,

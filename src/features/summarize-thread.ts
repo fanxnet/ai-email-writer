@@ -39,7 +39,7 @@ export interface SummarizeOptions {
 // ---------------------------------------------------------------------------
 
 /** Max tokens of email thread to send for summarization (larger than other features). */
-const MAX_CONTENT_TOKENS = 8000;
+const MAX_CONTENT_TOKENS = 6000;
 
 // ---------------------------------------------------------------------------
 // State
