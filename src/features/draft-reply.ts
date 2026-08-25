@@ -346,12 +346,12 @@ export async function refineReply(
 //    throw new Error('Please enter your refinement instructions.');
   if (!options.instructions || !options.instructions.trim()) {
     throw new Error('Please enter your refinement or reply instructions.');
-  }
-//  share reply instructions without refinement
-    refinement = options.instructions;
+  } else {
+//  redirect reply instructions if no refinement instructions.
+    refinement = options.instructions;}
   }
 
-  const prompt = `You are a professional email assistant.
+  const prompt = `You are a professional writing assistant.
 Requirements:
 - Keep the same general format (without signature)
 - Apply the requested changes while maintaining quality
