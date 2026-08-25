@@ -108,7 +108,7 @@ export async function refineDraft(
   }
 
   if (!refinement || !refinement.trim()) {
-    throw new Error('Please enter your refinement instructions.');
+    throw new Error('Please enter either your refinement or draft instructions.');
   }
 
   const prompt = `You are a professional email assistant.

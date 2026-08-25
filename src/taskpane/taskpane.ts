@@ -652,10 +652,10 @@ async function handleRegenerate(): Promise<void> {
 
 async function handleRefine(): Promise<void> {
   const input = $('refine-input') as HTMLInputElement;
-  const refinement = input?.value || '';
+  const refinement = input?.value || ($('draft-instructions') as HTMLTextAreaElement)?.value || '';
 
   if (!refinement.trim()) {
-    showError('Please enter refinement instructions.');
+    showError('Please enter either refinement or instructions.');
     return;
   }
 
