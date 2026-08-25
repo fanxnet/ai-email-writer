@@ -807,13 +807,11 @@ async function handleRegenerateReply(): Promise<void> {
 
 async function handleRefineReply(): Promise<void> {
   const input = $('reply-refine-input') as HTMLInputElement;
-  const refinement = input?.value || '';
-  
-  if (!refinement || !refinement.trim()) {
-//    throw new Error('Please enter your refinement instructions.');
+  const refinement = input?.value || ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
 //  redirect reply instructions if no refinement instructions.
-    refinement = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
-    }
+ 
+//  if (!refinement || !refinement.trim()) {
+//    throw new Error('Please enter your refinement instructions.');}
   
   hideError();
   showLoading('Refining reply...');
