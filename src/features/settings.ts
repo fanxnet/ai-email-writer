@@ -233,9 +233,9 @@ export function resetSettings(): void {
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
   noPlaceholders:
-    'Do not add a sign-off or signature (e.g. "Regards", "Sincerely") — the email client will add the signature automatically',
+    'Do not include placeholder like [Your Name], [Company], or [Recipient]',
   noSignature:
-    'Do not include placeholder tokens like [Your Name], [Company], or [Recipient]. Use real names from context',
+    'Do not add a sign-off or signature (e.g. "Best regards", "Kind regards", "Sincerely")',
   noSubjectLine:
     "Do not include a subject line in the output",
   keepShort:

@@ -346,7 +346,7 @@ export async function refineReply(
     throw new Error('Please enter either refinement or reply instructions.');
   }
 
-  const prompt = `You are a professional writing assistant.
+  const prompt = `Role:As a professional writing assistant,${profileText}
 Requirements:
 - Keep the same general format (without signature)
 - Apply the requested changes while maintaining quality
@@ -357,7 +357,8 @@ Here is the current draft reply:
 ${lastReply}
 ---
 
-Please revise the draft reply based on these instructions:${refinement}`;
+Please revise the draft reply based on the following instructions:
+${refinement}`;
 
   const refined = await generateText(prompt, {
     temperature: 0.6,
