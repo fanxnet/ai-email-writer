@@ -264,7 +264,8 @@ export function buildRulesText(): string {
     lines.push(`- ${settings.customRules.trim()}`);
   }
 
-  return lines.length > 0 ? `\n\nAdditional rules:\n${lines.join("\n")}` : "";
+//  return lines.length > 0 ? `\n\nAdditional rules:\n${lines.join("\n")}` : "";
+  return lines.length > 0 ? `Additional rules:\n${lines.join("\n")}` : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -274,17 +275,17 @@ export function buildRulesText(): string {
 /** Strategic prompt instructions for each email goal. */
 export const GOAL_PROMPTS: Record<string, string> = {
   'close-deal':
-    'Goal:Write with the strategic goal of CLOSING A DEAL. Create appropriate urgency, reinforce value and benefits, proactively address potential objections, and end with a clear, specific call to action. Use confident but not pushy language.',
+    'Write with the strategic goal of CLOSING A DEAL. Create appropriate urgency, reinforce value and benefits, proactively address potential objections, and end with a clear, specific call to action. Use confident but not pushy language.',
   'get-approval':
-    'Goal:Write with the strategic goal of GETTING A QUOTE OR PROPOSAL APPROVED. Summarize key value propositions concisely, address any likely concerns preemptively, create a sense of momentum, and make it easy to say yes with a clear next step.',
+    'Write with the strategic goal of GETTING A QUOTE OR PROPOSAL APPROVED. Summarize key value propositions concisely, address any likely concerns preemptively, create a sense of momentum, and make it easy to say yes with a clear next step.',
   'schedule-meeting':
-    'Goal:Write with the strategic goal of SCHEDULING A MEETING. Propose specific times (if context allows), emphasize the value of the meeting, keep it brief and action-oriented, and make it effortless to confirm.',
+    'Write with the strategic goal of SCHEDULING A MEETING. Propose specific times (if context allows), emphasize the value of the meeting, keep it brief and action-oriented, and make it effortless to confirm.',
   'follow-up':
-    'Goal:Write with the strategic goal of FOLLOWING UP ON AN OVERDUE ITEM. Be firm but professional, reference the original timeline, express understanding while maintaining urgency, and request a specific response or action by a clear date.',
+    'Write with the strategic goal of FOLLOWING UP ON AN OVERDUE ITEM. Be firm but professional, reference the original timeline, express understanding while maintaining urgency, and request a specific response or action by a clear date.',
   'request-intro':
-    'Goal:Write with the strategic goal of REQUESTING A FAVOR OR INTRODUCTION. Be respectful of the recipient\'s time, clearly explain the mutual benefit, make it easy to say yes by providing context they can forward, and express genuine appreciation.',
+    'Write with the strategic goal of REQUESTING A FAVOR OR INTRODUCTION. Be respectful of the recipient\'s time, clearly explain the mutual benefit, make it easy to say yes by providing context they can forward, and express genuine appreciation.',
   'resolve-complaint':
-    'Goal:Write with the strategic goal of RESOLVING A COMPLAINT. Acknowledge the issue with empathy, take ownership where appropriate, propose a concrete resolution, and aim to turn a negative experience into a positive one.',
+    'Write with the strategic goal of RESOLVING A COMPLAINT. Acknowledge the issue with empathy, take ownership where appropriate, propose a concrete resolution, and aim to turn a negative experience into a positive one.',
 };
 
 /**
@@ -295,11 +296,11 @@ export function buildGoalText(goal: string, customGoalText?: string): string {
   if (!goal || goal === 'none') return '';
 
   if (goal === 'custom' && customGoalText?.trim()) {
-    return `\n\nStrategic goal: ${customGoalText.trim()}. Write the email with this specific outcome in mind — use appropriate persuasion, structure, and a clear call to action.`;
+    return `Goal: ${customGoalText.trim()}`;
   }
 
   const prompt = GOAL_PROMPTS[goal];
-  return prompt ? `\n\n${prompt}` : '';
+  return prompt ? `Goal: ${prompt}` : '';
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +394,6 @@ export function buildProfileText(): string {
 
   const career = getCareers().find((c) => c.id === settings.activeCareerId);
   if (!career || !career.description.trim()) return '';
-
-  return `\n\nRole and profile:\n${career.description.trim()}`;
+//  return `\n\nRole and profile:\n${career.description.trim()}`;
+  return `${career.description.trim()}`;
 }

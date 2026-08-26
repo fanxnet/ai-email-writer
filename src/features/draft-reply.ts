@@ -345,7 +345,8 @@ export async function refineReply(
   if (!refinement || !refinement.trim()) {
     throw new Error('Please enter either refinement or reply instructions.');
   }
-
+  
+  const profileText = buildProfileText();
   const prompt = `Role:As a professional writing assistant,${profileText}
 Requirements:
 - Keep the same general format (without signature)

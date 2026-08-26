@@ -110,7 +110,7 @@ export async function refineDraft(
   if (!refinement || !refinement.trim()) {
     throw new Error('Please enter either your refinement or draft instructions.');
   }
-
+  const profileText = buildProfileText();
   const prompt = `Role:As a professional writing assistant,${profileText}
 Requirements:
 - Keep the same general format (Subject, greeting, body, sign-off)
