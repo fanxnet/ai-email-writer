@@ -265,7 +265,7 @@ export function buildRulesText(): string {
   }
 
 //  return lines.length > 0 ? `\n\nAdditional rules:\n${lines.join("\n")}` : "";
-  return lines.length > 0 ? `Additional rules:\n${lines.join("\n")}` : "";
+  return lines.length > 0 ? `${lines.join("\n")}` : "";
 }
 
 // ---------------------------------------------------------------------------
