@@ -94,7 +94,7 @@ jobs:
       - name: Delete old deployments
         uses: strumwolf/delete-deployment-environment@v2
         with:
-          token: ${{ secrets.GH_PAT_TOKEN }}
+          token: ${{ secrets.fedora }}
           environment: gh-pages
           onlyRemoveDeployments: true
 
