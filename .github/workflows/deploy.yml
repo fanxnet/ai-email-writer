@@ -92,7 +92,7 @@ jobs:
       write-all
     steps:
       - name: Delete old deployments
-        uses: strumwolf/delete-deployment-environment@v2
+        uses: strumwolf/delete-deployment-environment@v4
         with:
           token: ${{ secrets.GH_PAT_TOKEN }}
           onlyRemoveDeployments: true
