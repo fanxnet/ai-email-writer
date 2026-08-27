@@ -16,7 +16,8 @@ import { generateText } from '../services/ai-service';
 import { buildPrompt } from '../prompts/builder';
 import { DRAFT_EMAIL_PROMPT } from '../prompts/templates';
 import { getItemMode, getCurrentEmailBodyHtml } from '../services/outlook';
-import { buildGoalText, buildRulesText, buildProfileText } from './settings';
+import { getSetting, buildGoalText, buildRulesText, buildProfileText } from './settings';
+import { saveDraftOutput, getDraftOutput } from './auto-save';
 import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
 
 // ---------------------------------------------------------------------------
@@ -72,16 +73,18 @@ export async function generateDraft(
     RULES: rulesText,
   });
 
-  // Call Gemini
+  // Call Ai (reasoning mode is inherited from the value saved in the Reply UI)
   const draft = await generateText(prompt, {
     temperature: 0.7,
     maxOutputTokens: getMaxTokensForLength(options.length),
+    reasoningMode: getSetting('reasoningMode'),
     onStream,
   });
 
-  // Store for regenerate/refine
+  // Store for regenerate/refine and persist for cross-reopen restore (24h)
   lastOptions = { ...options };
   lastDraft = draft;
+  saveDraftOutput(draft, lastOptions);
 
   return draft;
 }
@@ -128,10 +131,12 @@ ${refinement}`;
   const refined = await generateText(prompt, {
     temperature: 0.6,
     maxOutputTokens: 2048,
+    reasoningMode: getSetting('reasoningMode'),
     onStream,
   });
 
   lastDraft = refined;
+  if (lastOptions) saveDraftOutput(refined, lastOptions);
   return refined;
 }
 
@@ -194,6 +199,20 @@ export function getLastDraft(): string {
  */
 export function hasPreviousDraft(): boolean {
   return !!lastDraft;
+}
+
+/**
+ * Restore the last persisted draft output (within the 24h window) into module
+ * state so Regenerate / Refine / Copy keep working after the taskpane reopens.
+ * Returns `null` when there is no saved (or still-valid) output.
+ */
+export function restoreDraftFromStorage(): { draft: string; options: DraftEmailOptions } | null {
+  const saved = getDraftOutput();
+  if (!saved) return null;
+
+  lastDraft = saved.draft;
+  lastOptions = { ...saved.options };
+  return { draft: saved.draft, options: saved.options };
 }
 
 // ---------------------------------------------------------------------------

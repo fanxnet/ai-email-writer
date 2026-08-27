@@ -6,7 +6,7 @@
  * backoff, and granular error handling.
  */
 
-import { getSetting, ReasoningMode } from '../features/settings';
+import { getSetting, ReasoningMode, MAX_RETRIES, INITIAL_RETRY_DELAY_MS, RETRY_BACKOFF_FACTOR } from '../features/settings';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -17,15 +17,6 @@ import { getSetting, ReasoningMode } from '../features/settings';
 const CONNECT_TIMEOUT_MS = 30_000; // No response headers at all.
 const STALL_TIMEOUT_MS = 60_000; // No new body data after the stream started.
 const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
-
-/** Maximum retry attempts after the initial call. */
-const MAX_RETRIES = 3;
-
-/** Initial backoff delay between retries (ms). */
-const INITIAL_RETRY_DELAY_MS = 1000;
-
-/** Exponential backoff factor applied after each retry. */
-const RETRY_BACKOFF_FACTOR = 2;
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 

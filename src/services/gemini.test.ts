@@ -47,6 +47,9 @@ jest.mock('@google/genai', () => {
 // Mock settings to avoid side-effect import issues
 jest.mock('../features/settings', () => ({
   getSetting: jest.fn().mockReturnValue(null),
+  MAX_RETRIES: 0,
+  INITIAL_RETRY_DELAY_MS: 1000,
+  RETRY_BACKOFF_FACTOR: 2,
 }));
 
 // ---------------------------------------------------------------------------
@@ -312,7 +315,7 @@ describe('generateText — retry with backoff', () => {
       .mockRejectedValueOnce(rateLimitError)
       .mockImplementation(() => streamOf(['Success after retries!']));
 
-    const result = await generateText('test');
+    const result = await generateText('test', { maxRetries: 3 });
     expect(result).toBe('Success after retries!');
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(3);
   }, 30_000);
@@ -325,7 +328,7 @@ describe('generateText — retry with backoff', () => {
       .mockRejectedValueOnce(serverError)
       .mockImplementation(() => streamOf(['Recovered from server error.']));
 
-    const result = await generateText('test');
+    const result = await generateText('test', { maxRetries: 2 });
     expect(result).toBe('Recovered from server error.');
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(2);
   }, 15_000);
@@ -348,7 +351,7 @@ describe('generateText — retry with backoff', () => {
 
     mockGenerateContentStream.mockRejectedValue(rateLimitError);
 
-    await expect(generateText('test')).rejects.toMatchObject({
+    await expect(generateText('test', { maxRetries: 3 })).rejects.toMatchObject({
       code: GeminiErrorCode.RATE_LIMITED,
     });
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(4);

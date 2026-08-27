@@ -224,7 +224,7 @@ describe('generateReply language resolution', () => {
     await generateReply(options());
 
     const prompt = mockGenerateText.mock.calls[0][0] as string;
-    expect(prompt).toContain('Language：auto');
+    expect(prompt).toContain('Language：the same language as the original email');
   });
 
   it('explicit language selection → used verbatim in prompt', async () => {

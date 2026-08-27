@@ -11,7 +11,7 @@
  */
 
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
-import { getSetting, ReasoningMode } from '../features/settings';
+import { getSetting, ReasoningMode, MAX_RETRIES, INITIAL_RETRY_DELAY_MS, RETRY_BACKOFF_FACTOR } from '../features/settings';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,10 +110,6 @@ const DEFAULT_TEMPERATURE = 1.0;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2048;
 const DEFAULT_TOP_P = 0.95;
 const DEFAULT_TOP_K = 40;
-
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY_MS = 1000;
-const RETRY_BACKOFF_FACTOR = 2;
 
 // Streaming health-monitoring tiers. All times are wall-clock and are not
 // affected by prompt size — a model that goes quiet is hanging regardless of

@@ -11,6 +11,21 @@ import { initGeminiClient } from "../services/gemini";
 import { initDeepSeekClient } from "../services/deepseek";
 
 // ---------------------------------------------------------------------------
+// Retry configuration (shared by the Gemini & DeepSeek providers)
+// ---------------------------------------------------------------------------
+
+/** Maximum automatic retry attempts after the initial call. Defaults to 0 —
+ * no automatic retries — so retries never burn API tokens unbeknown to the
+ * user. Callers opt back in explicitly via `maxRetries`. */
+export const MAX_RETRIES = 0;
+
+/** Initial backoff delay between retries (ms). */
+export const INITIAL_RETRY_DELAY_MS = 1000;
+
+/** Exponential backoff factor applied after each retry. */
+export const RETRY_BACKOFF_FACTOR = 2;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 

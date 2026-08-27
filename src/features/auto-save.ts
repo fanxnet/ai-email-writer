@@ -17,6 +17,7 @@
 /* global Office, localStorage */
 
 import { getTemplates, saveTemplate, deleteTemplate } from './settings';
+import type { DraftEmailOptions } from './draft-email';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,6 +34,19 @@ const AUTO_SESSIONS_KEY = 'aic_auto_sessions';
 
 /** Template name prefix for auto-saved entries. */
 const AUTO_PREFIX = 'auto-';
+
+/** localStorage key holding the single latest generated draft output. */
+const DRAFT_OUTPUT_KEY = 'aic_draft_output';
+
+/** How long a saved draft output stays valid before it is discarded (24 hours). */
+const DRAFT_OUTPUT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** The persisted shape of the latest generated draft. */
+export interface SavedDraftOutput {
+  draft: string;
+  options: DraftEmailOptions;
+  savedAt: number;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -211,4 +225,63 @@ export function getAutoInstructions(
 
   const template = getTemplates().find((t) => t.id === id && t.type === type);
   return template ? template.instructions : null;
+}
+
+// ---------------------------------------------------------------------------
+// Draft output persistence (single global slot, 24h TTL)
+// ---------------------------------------------------------------------------
+
+/**
+ * Persist the latest generated draft output into a single global slot so the
+ * result (and Regenerate / Refine / Copy actions) can be restored when the
+ * taskpane reopens. Drafts correspond to composing a new email, so they are
+ * NOT keyed to any conversation thread. Overwrites any previous value.
+ */
+export function saveDraftOutput(draft: string, options: DraftEmailOptions): void {
+  try {
+    const payload: SavedDraftOutput = {
+      draft,
+      options,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(DRAFT_OUTPUT_KEY, JSON.stringify(payload));
+  } catch {
+    // localStorage might be unavailable in some sandboxed environments
+  }
+}
+
+/**
+ * Read the latest generated draft output, or `null` when none is available.
+ * Entries older than the 24h window are discarded (removed) and reported as
+ * absent.
+ */
+export function getDraftOutput(): SavedDraftOutput | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_OUTPUT_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as SavedDraftOutput;
+    if (!parsed || !parsed.draft || !parsed.options || !parsed.savedAt) {
+      localStorage.removeItem(DRAFT_OUTPUT_KEY);
+      return null;
+    }
+
+    if (Date.now() - parsed.savedAt > DRAFT_OUTPUT_TTL_MS) {
+      localStorage.removeItem(DRAFT_OUTPUT_KEY);
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Clear the persisted draft output. */
+export function clearDraftOutput(): void {
+  try {
+    localStorage.removeItem(DRAFT_OUTPUT_KEY);
+  } catch {
+    // Ignore
+  }
 }

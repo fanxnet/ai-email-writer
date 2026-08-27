@@ -243,7 +243,7 @@ describe('retryWithBackoff', () => {
   it('retries a transient 5xx error up to 4 times then throws', async () => {
     mockFetch.mockResolvedValue(sseResponse([], false, 500, 'boom'));
 
-    const promise = generateText('Say hi', { model: 'deepseek-chat' });
+    const promise = generateText('Say hi', { model: 'deepseek-chat', maxRetries: 3 });
     const matcher = expect(promise).rejects.toMatchObject({
       code: DeepSeekErrorCode.API_ERROR,
       retryable: true,
@@ -257,7 +257,7 @@ describe('retryWithBackoff', () => {
   it('retries rate-limited (429) responses', async () => {
     mockFetch.mockResolvedValue(sseResponse([], false, 429, 'slow down'));
 
-    const promise = generateText('Say hi', { model: 'deepseek-chat' });
+    const promise = generateText('Say hi', { model: 'deepseek-chat', maxRetries: 3 });
     const matcher = expect(promise).rejects.toMatchObject({
       code: DeepSeekErrorCode.RATE_LIMITED,
       retryable: true,
@@ -273,7 +273,7 @@ describe('retryWithBackoff', () => {
       .mockResolvedValueOnce(sseResponse([], false, 500, 'boom'))
       .mockResolvedValueOnce(sseResponse([delta('recovered'), DONE]));
 
-    const promise = generateText('Say hi', { model: 'deepseek-chat' });
+    const promise = generateText('Say hi', { model: 'deepseek-chat', maxRetries: 1 });
     await jest.advanceTimersByTimeAsync(100_000);
 
     await expect(promise).resolves.toBe('recovered');

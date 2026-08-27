@@ -21,6 +21,7 @@ import {
   regenerateDraft,
   refineDraft,
   copyToCompose,
+  restoreDraftFromStorage,
   DraftEmailOptions,
 } from '../features/draft-email';
 import {
@@ -430,6 +431,11 @@ function switchTab(tabName: string): void {
     restoreActiveInstructions();
   }
 
+  // Restore the latest generated draft output when returning to the Draft tab
+  if (tabName === 'draft') {
+    restoreDraftFromHistory();
+  }
+
   // Auto-load email context when switching to Reply tab
   if (tabName === 'reply') {
     loadReplyContext();
@@ -539,6 +545,29 @@ function restoreReplyFromHistory(): void {
     }
   } catch {
     // Best-effort restore — never block the panel on history issues
+  }
+}
+
+/**
+ * Restore the most recent generated draft output (within the 24h window) so
+ * the draft result and its actions (Regenerate / Refine / Copy) work again
+ * after the taskpane reopens or the user returns to the Draft tab.
+ */
+function restoreDraftFromHistory(): void {
+  try {
+    const restored = restoreDraftFromStorage();
+    const draftTabActive =
+      document.querySelector('.aic-tab--active')?.getAttribute('data-tab') === 'draft';
+    if (!restored) {
+      hideElement('result-section');
+      return;
+    }
+    setPreview('draft-preview', restored.draft);
+    // Only reveal the result section when the Draft tab is active, so the
+    // restored output never shows on another tab.
+    if (draftTabActive) showElement('result-section');
+  } catch {
+    // Best-effort restore — never block the panel
   }
 }
 
@@ -1448,6 +1477,7 @@ Office.onReady((info) => {
     // Restore auto-saved instructions for the current conversation
     restoreActiveInstructions();
     restoreReplyFromHistory();
+    restoreDraftFromHistory();
 
     // Persist instructions when the sidebar is closed / the add-in is unloaded
     window.addEventListener('pagehide', autoSaveSession);
