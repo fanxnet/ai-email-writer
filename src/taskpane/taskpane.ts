@@ -541,6 +541,7 @@ function restoreReplyFromHistory(): void {
     }
 
     setPreview('reply-preview', restored.reply);
+    scrollToBottom($('reply-preview'));
     showElement('reply-result-section');
 
     // In compose mode, Reply All is redundant — user already chose reply type
@@ -567,6 +568,7 @@ function restoreDraftFromHistory(): void {
       return;
     }
     setPreview('draft-preview', restored.draft);
+    scrollToBottom($('draft-preview'));
     // Only reveal the result section when the Draft tab is active, so the
     // restored output never shows on another tab.
     if (draftTabActive) showElement('result-section');
@@ -618,6 +620,11 @@ function renderConversationPanel(): void {
   }
 }
 
+/** Scroll an element so its own bottom is visible (its overflow scroll). */
+function scrollToBottom(el: HTMLElement | null): void {
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
 // ---------------------------------------------------------------------------
 // Draft Email handlers
 // ---------------------------------------------------------------------------
@@ -650,6 +657,7 @@ async function handleGenerate(): Promise<void> {
     const draft = await generateDraft(options, (delta) => writer?.append(delta));
     writer?.finish();
     setPreview('draft-preview', draft);
+    scrollToBottom($('draft-preview'));
     $('result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err: any) {
     writer?.clear();
@@ -674,6 +682,7 @@ async function handleRegenerate(): Promise<void> {
     const draft = await regenerateDraft((delta) => writer?.append(delta));
     writer?.finish();
     setPreview('draft-preview', draft);
+    scrollToBottom($('draft-preview'));
   } catch (err: any) {
     writer?.clear();
     writer?.finish();
@@ -705,6 +714,7 @@ async function handleRefine(): Promise<void> {
     const draft = await refineDraft(refinement, (delta) => writer?.append(delta));
     writer?.finish();
     setPreview('draft-preview', draft);
+    scrollToBottom($('draft-preview'));
     if (input) input.value = '';
   } catch (err: any) {
     writer?.clear();
@@ -798,7 +808,9 @@ async function handleGenerateReply(): Promise<void> {
     const reply = await generateReply(options, (delta) => writer?.append(delta));
     writer?.finish();
     setPreview('reply-preview', reply);
+    scrollToBottom($('reply-preview'));
     renderConversationPanel();
+    scrollToBottom($('reply-conversation-panel'));
     $('reply-result-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     // In compose mode, Reply All is redundant — user already chose reply type
@@ -828,7 +840,9 @@ async function handleRegenerateReply(): Promise<void> {
     const reply = await regenerateReply((delta) => writer?.append(delta));
     writer?.finish();
     setPreview('reply-preview', reply);
+    scrollToBottom($('reply-preview'));
     renderConversationPanel();
+    scrollToBottom($('reply-conversation-panel'));
   } catch (err: any) {
     writer?.clear();
     writer?.finish();
@@ -859,7 +873,9 @@ async function handleRefineReply(): Promise<void> {
     const reply = await refineReply(refinement, (delta) => writer?.append(delta));
     writer?.finish();
     setPreview('reply-preview', reply);
+    scrollToBottom($('reply-preview'));
     renderConversationPanel();
+    scrollToBottom($('reply-conversation-panel'));
     if (input) input.value = '';
   } catch (err: any) {
     writer?.clear();
@@ -1677,6 +1693,7 @@ Office.onReady((info) => {
       renderConversationPanel();
       const panel = conversationPanel();
       if (panel) panel.classList.remove('hidden');
+      scrollToBottom(panel);
       setConversationLabel('Hide');
       closeConversationDropdown();
     };
