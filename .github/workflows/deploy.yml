@@ -39,7 +39,7 @@ jobs:
           path: ./dist
 
   deploy-dev:
-    needs: [build,cleanup]
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifact
