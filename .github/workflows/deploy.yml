@@ -84,8 +84,8 @@ jobs:
           destination_dir: .
           keep_files: false
           exclude_assets: "dev/**"
- 
-   cleanup:
+
+  cleanup:
     if: github.event_name == 'workflow_dispatch' 
     runs-on: ubuntu-latest
     permissions:
@@ -94,6 +94,6 @@ jobs:
       - name: Delete old deployments
         uses: strumwolf/delete-deployment-environment@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          personal_token: ${{ secrets.GH_PAT_TOKEN }}
           environment: github-pages
           onlyRemoveDeployments: true
