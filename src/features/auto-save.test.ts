@@ -3,7 +3,7 @@
  *
  * Covers the persisted draft-output store (single global slot, 24h TTL):
  * save / read round-trips, overwriting, clearing, and expiry. Also covers the
- * draft-instructions history (global slot, 24h TTL, ≤5 distinct values).
+ * draft-instructions history (shared template store, 24h TTL, ≤5 distinct).
  */
 
 import {
@@ -13,8 +13,10 @@ import {
   saveDraftInstructions,
   getDraftInstructions,
   clearDraftInstructions,
+  autoSaveEntry,
   SavedDraftOutput,
 } from './auto-save';
+import { getTemplates } from './settings';
 
 // ---------------------------------------------------------------------------
 // localStorage mock (jest testEnvironment is node, not jsdom)
@@ -129,8 +131,22 @@ describe('clearDraftOutput', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Draft instructions (global slot, 24h TTL, ≤5 distinct values)
+// Draft instructions (shared template store, 24h TTL, ≤5 distinct values)
 // ---------------------------------------------------------------------------
+
+/** Advance the mocked clock so successive saves get distinct timestamps. */
+const advanceClock = (ms = 1000): void => jest.advanceTimersByTime(ms);
+
+/** Auto-saved draft templates, newest first (matching source ordering). */
+const draftAutos = (): Array<{ name: string; instructions: string; type: string }> => {
+  const ts = (name: string): number => {
+    const m = name.match(/^autod-(\d{14})$/);
+    return m ? Number(m[1]) : 0;
+  };
+  return getTemplates()
+    .filter((t) => t.name.startsWith('autod-'))
+    .sort((a, b) => ts(b.name) - ts(a.name));
+};
 
 describe('draft instructions store', () => {
   it('round-trips the most recent instructions', () => {
@@ -139,7 +155,9 @@ describe('draft instructions store', () => {
   });
 
   it('returns the most recent instructions after multiple saves', () => {
+    advanceClock();
     saveDraftInstructions('First set of draft instructions here');
+    advanceClock();
     saveDraftInstructions('Second set of draft instructions here');
     expect(getDraftInstructions()).toBe('Second set of draft instructions here');
   });
@@ -147,37 +165,44 @@ describe('draft instructions store', () => {
   it('ignores content shorter than MIN_LENGTH (20 chars)', () => {
     saveDraftInstructions('Short');
     expect(getDraftInstructions()).toBeNull();
+    expect(draftAutos()).toHaveLength(0);
   });
 
-  it('does not duplicate identical values and refreshes it to the front', () => {
+  it('stores the saved instructions as a type=draft auto template (dropdown visible)', () => {
+    saveDraftInstructions('Dropdown visible instructions content here');
+    expect(draftAutos()).toHaveLength(1);
+    expect(draftAutos()[0].type).toBe('draft');
+    expect(draftAutos()[0].instructions).toBe('Dropdown visible instructions content here');
+    expect(draftAutos()[0].name).toMatch(/^autod-\d{14}$/);
+  });
+
+  it('does not duplicate identical values', () => {
     const instructions = 'Repeated instructions content here';
+    advanceClock();
     saveDraftInstructions(instructions);
+    advanceClock();
     saveDraftInstructions('A different set of instructions here');
+    advanceClock();
     saveDraftInstructions(instructions);
 
     expect(getDraftInstructions()).toBe(instructions);
-    // Exactly 2 distinct entries are kept (no duplicate of the repeated value).
-    const raw = (global as unknown as { localStorage: Storage }).localStorage.getItem(
-      'aic_draft_instructions',
-    );
-    const parsed = JSON.parse(raw as string) as Array<{ instructions: string }>;
-    expect(parsed).toHaveLength(2);
-    expect(parsed[0].instructions).toBe(instructions);
+    // The earlier copy of the repeated value is replaced, so only 2 distinct
+    // auto-draft templates remain.
+    expect(draftAutos()).toHaveLength(2);
   });
 
   it('keeps at most the 5 most recent distinct values', () => {
     for (let i = 1; i <= 6; i++) {
+      advanceClock();
       saveDraftInstructions(`Instructions set number ${i}`);
     }
 
-    const raw = (global as unknown as { localStorage: Storage }).localStorage.getItem(
-      'aic_draft_instructions',
-    );
-    const parsed = JSON.parse(raw as string) as Array<{ instructions: string }>;
-    expect(parsed).toHaveLength(5);
+    const autos = draftAutos();
+    expect(autos).toHaveLength(5);
     // Newest first; the oldest ("set number 1") is evicted.
-    expect(parsed[0].instructions).toBe('Instructions set number 6');
-    expect(parsed[4].instructions).toBe('Instructions set number 2');
+    expect(autos[0].instructions).toBe('Instructions set number 6');
+    expect(autos[4].instructions).toBe('Instructions set number 2');
+    expect(getDraftInstructions()).toBe('Instructions set number 6');
   });
 
   it('discards entries older than the 24h window', () => {
@@ -190,6 +215,22 @@ describe('draft instructions store', () => {
     // A moment past 24h is expired
     jest.setSystemTime(new Date('2026-01-02T00:00:01Z'));
     expect(getDraftInstructions()).toBeNull();
+    expect(draftAutos()).toHaveLength(0);
+  });
+
+  it('is not evicted by reply auto-saves (per-type limit)', () => {
+    for (let i = 1; i <= 5; i++) {
+      advanceClock();
+      saveDraftInstructions(`Draft instructions set number ${i}`);
+    }
+
+    advanceClock();
+    autoSaveEntry('reply', 'Reply instructions content here', 'conv:test');
+
+    expect(draftAutos()).toHaveLength(5);
+    expect(
+      getTemplates().filter((t) => t.name.startsWith('autor-')),
+    ).toHaveLength(1);
   });
 });
 
@@ -200,5 +241,6 @@ describe('clearDraftInstructions', () => {
 
     clearDraftInstructions();
     expect(getDraftInstructions()).toBeNull();
+    expect(draftAutos()).toHaveLength(0);
   });
 });

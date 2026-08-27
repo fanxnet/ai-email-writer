@@ -6,17 +6,19 @@
  * same email conversation.
  *
  * Auto-saved templates are stored in the shared template store
- * (`aic_templates`, see settings.ts) with the name `auto-YYYYMMDDHHMMSS`,
- * and a separate session index keys each entry to its conversation.
- * At most 5 auto-saved templates are kept (oldest evicted first), and
- * each conversation keeps at most one per type (draft / reply).
+ * (`aic_templates`, see settings.ts) with the name `autod-YYYYMMDDHHMMSS`
+ * (draft) or `autor-YYYYMMDDHHMMSS` (reply), and a separate session index
+ * keys each entry to its conversation.
+ * At most 5 auto-saved templates are kept per type (draft / reply; oldest
+ * evicted first), each conversation keeps at most one reply entry, and the
+ * draft history keeps the 5 most recent distinct instruction sets globally.
  *
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
 /* global Office, localStorage */
 
-import { getTemplates, saveTemplate, deleteTemplate } from './settings';
+import { getTemplates, saveTemplate, deleteTemplate, EmailTemplate } from './settings';
 import type { DraftEmailOptions } from './draft-email';
 
 // ---------------------------------------------------------------------------
@@ -32,17 +34,19 @@ const MAX_AUTO_TEMPLATES = 5;
 /** localStorage key for the conversation → template index. */
 const AUTO_SESSIONS_KEY = 'aic_auto_sessions';
 
-/** Template name prefix for auto-saved entries. */
-const AUTO_PREFIX = 'auto-';
+/** Template name prefix for auto-saved reply entries. */
+const REPLY_AUTO_PREFIX = 'autor-';
+
+/** Template name prefix for auto-saved draft entries. */
+const DRAFT_AUTO_PREFIX = 'autod-';
+
+/** Name prefix for auto-saved entries of the given type. */
+function autoPrefix(type: AutoSaveType): string {
+  return type === 'draft' ? DRAFT_AUTO_PREFIX : REPLY_AUTO_PREFIX;
+}
 
 /** localStorage key holding the single latest generated draft output. */
 const DRAFT_OUTPUT_KEY = 'aic_draft_output';
-
-/** localStorage key holding the recent draft instructions (global history). */
-const DRAFT_INSTRUCTIONS_KEY = 'aic_draft_instructions';
-
-/** How many distinct recent draft-instruction sets to keep. */
-const MAX_DRAFT_INSTRUCTIONS = 5;
 
 /** How long a saved draft item stays valid before it is discarded (24 hours). */
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -51,12 +55,6 @@ const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 export interface SavedDraftOutput {
   draft: string;
   options: DraftEmailOptions;
-  savedAt: number;
-}
-
-/** One entry in the global draft-instructions history. */
-interface SavedDraftInstruction {
-  instructions: string;
   savedAt: number;
 }
 
@@ -162,19 +160,22 @@ function formatTimestamp(date: Date): string {
 }
 
 /**
- * Parse the timestamp from an auto template name (`auto-YYYYMMDDHHMMSS`).
- * Returns 0 when the name is malformed so those sort as oldest.
+ * Parse the timestamp from an auto template name (`autod-YYYYMMDDHHMMSS` or
+ * `autor-YYYYMMDDHHMMSS`). Returns 0 when the name is malformed so those
+ * sort as oldest.
  */
 function parseTimestamp(name: string): number {
-  const match = name.match(/^auto-(\d{14})$/);
+  const match = name.match(/^(?:autod|autor)-(\d{14})$/);
   return match ? Number(match[1]) : 0;
 }
 
-/** Keep at most MAX_AUTO_TEMPLATES auto templates, evicting the oldest. */
-function enforceAutoLimit(): void {
+/** Keep at most MAX_AUTO_TEMPLATES auto templates per type, evicting the
+ * oldest within each type. Draft and reply each keep their own 5-entry
+ * history so one type never evicts the other's auto-saved entries. */
+function enforceAutoLimit(type: AutoSaveType): void {
   const templates = getTemplates();
   const autos = templates
-    .filter((t) => t.name.startsWith(AUTO_PREFIX))
+    .filter((t) => t.name.startsWith(autoPrefix(type)))
     .sort((a, b) => parseTimestamp(a.name) - parseTimestamp(b.name));
 
   if (autos.length <= MAX_AUTO_TEMPLATES) return;
@@ -212,7 +213,7 @@ export function autoSaveEntry(
   if (previousId) deleteTemplate(previousId);
 
   const entry = saveTemplate({
-    name: `${AUTO_PREFIX}${formatTimestamp(new Date())}`,
+    name: `${autoPrefix(type)}${formatTimestamp(new Date())}`,
     instructions: trimmed,
     type,
   });
@@ -220,7 +221,7 @@ export function autoSaveEntry(
   index[sessionKey] = { ...index[sessionKey], [type]: entry.id };
   persistIndex(index);
 
-  enforceAutoLimit();
+  enforceAutoLimit(type);
 }
 
 /**
@@ -299,49 +300,70 @@ export function clearDraftOutput(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Draft instructions persistence (single global slot, 24h TTL, ≤5 distinct)
+// Draft instructions persistence (shared template store, 24h TTL, ≤5 distinct)
 // ---------------------------------------------------------------------------
 
-/** Read and prune (24h) the global draft-instructions history. */
-function loadDraftInstructions(): SavedDraftInstruction[] {
-  try {
-    const raw = localStorage.getItem(DRAFT_INSTRUCTIONS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
+/**
+ * Convert an auto template name (`autod-YYYYMMDDHHMMSS` or
+ * `autor-YYYYMMDDHHMMSS`) into an epoch timestamp in milliseconds. Returns 0
+ * when the name is malformed.
+ */
+function autoTemplateAgeMs(name: string): number {
+  const match = name.match(/^(?:autod|autor)-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+  if (!match) return 0;
+  const [, y, mo, d, h, mi, s] = match;
+  const date = new Date(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    Number(s),
+  );
+  return Date.now() - date.getTime();
+}
 
-    const now = Date.now();
-    const fresh = parsed.filter(
-      (e) => e && typeof e.instructions === 'string' && typeof e.savedAt === 'number' &&
-        now - e.savedAt <= DRAFT_TTL_MS,
-    );
-
-    if (fresh.length !== parsed.length) {
-      localStorage.setItem(DRAFT_INSTRUCTIONS_KEY, JSON.stringify(fresh));
-    }
-    return fresh;
-  } catch {
-    return [];
-  }
+/** Auto-saved draft templates (name prefix `autod-`), newest first. */
+function getDraftAutoTemplates(): EmailTemplate[] {
+  return getTemplates()
+    .filter((t) => t.name.startsWith(DRAFT_AUTO_PREFIX))
+    .sort((a, b) => parseTimestamp(b.name) - parseTimestamp(a.name));
 }
 
 /**
- * Persist the draft instructions into a single global history slot — NOT
- * keyed to any conversation thread (drafts are new emails). Distinct values
- * are de-duplicated, the newest entry is placed first, and at most
- * `MAX_DRAFT_INSTRUCTIONS` entries are kept. Content shorter than MIN_LENGTH
- * characters (after trimming) is ignored.
+ * Delete auto-saved draft templates that are stale (expired beyond the 24h
+ * window) or a duplicate of `instructions` (when non-empty).
+ */
+function pruneDraftAutos(instructions: string): void {
+  const stale = getDraftAutoTemplates().filter(
+    (t) => autoTemplateAgeMs(t.name) > DRAFT_TTL_MS ||
+      (instructions !== '' && t.instructions === instructions),
+  );
+  for (const t of stale) deleteTemplate(t.id);
+}
+
+/**
+ * Auto-save the draft instructions into the shared template store (type
+ * 'draft', name `autod-<timestamp>`) so they appear in the Draft "Templates…"
+ * dropdown exactly like reply autos. Drafts are new emails, so this is NOT
+ * keyed to any conversation thread. Distinct values are de-duplicated, stale
+ * (24h) entries are discarded, and at most 5 draft autos are kept. Content
+ * shorter than MIN_LENGTH characters (after trimming) is ignored.
  */
 export function saveDraftInstructions(text: string): void {
   try {
     const trimmed = (text || '').trim();
     if (trimmed.length < MIN_LENGTH) return;
 
-    const list = loadDraftInstructions().filter((e) => e.instructions !== trimmed);
-    list.unshift({ instructions: trimmed, savedAt: Date.now() });
-    localStorage.setItem(
-      DRAFT_INSTRUCTIONS_KEY,
-      JSON.stringify(list.slice(0, MAX_DRAFT_INSTRUCTIONS)),
-    );
+    pruneDraftAutos(trimmed);
+
+    saveTemplate({
+      name: `${DRAFT_AUTO_PREFIX}${formatTimestamp(new Date())}`,
+      instructions: trimmed,
+      type: 'draft',
+    });
+
+    enforceAutoLimit('draft');
   } catch {
     // localStorage might be unavailable in some sandboxed environments
   }
@@ -349,18 +371,24 @@ export function saveDraftInstructions(text: string): void {
 
 /**
  * Read the most recent draft instructions, or `null` when none is available
- * (nothing saved, all entries expired, or malformed data). The most recent
- * distinct value is returned.
+ * (nothing saved, all entries expired, or malformed data). Stale (24h) entries
+ * are discarded as a side effect.
  */
 export function getDraftInstructions(): string | null {
-  const list = loadDraftInstructions();
-  return list.length > 0 ? list[0].instructions : null;
+  try {
+    pruneDraftAutos('');
+    const autos = getDraftAutoTemplates();
+    return autos.length > 0 ? autos[0].instructions : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Clear the persisted draft instructions history. */
 export function clearDraftInstructions(): void {
   try {
-    localStorage.removeItem(DRAFT_INSTRUCTIONS_KEY);
+    const autos = getDraftAutoTemplates();
+    for (const t of autos) deleteTemplate(t.id);
   } catch {
     // Ignore
   }
