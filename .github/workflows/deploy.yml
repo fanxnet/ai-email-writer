@@ -60,7 +60,7 @@ jobs:
       - name: Deploy to gh-pages /dev
         uses: peaceiris/actions-gh-pages@v4
         with:
-          personal_token: ${{ secrets.GH_PAT_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           destination_dir: dev
           keep_files: true
@@ -79,7 +79,7 @@ jobs:
       - name: Deploy to gh-pages root
         uses: peaceiris/actions-gh-pages@v4
         with:
-          personal_token: ${{ secrets.GH_PAT_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           destination_dir: .
           keep_files: false
@@ -94,6 +94,5 @@ jobs:
       - name: Delete old deployments
         uses: strumwolf/delete-deployment-environment@v2
         with:
-          personal_token: ${{ secrets.GH_PAT_TOKEN }}
-          environment: github-pages
+          token: ${{ secrets.GH_PAT_TOKEN }}
           onlyRemoveDeployments: true
