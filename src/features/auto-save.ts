@@ -38,13 +38,25 @@ const AUTO_PREFIX = 'auto-';
 /** localStorage key holding the single latest generated draft output. */
 const DRAFT_OUTPUT_KEY = 'aic_draft_output';
 
-/** How long a saved draft output stays valid before it is discarded (24 hours). */
-const DRAFT_OUTPUT_TTL_MS = 24 * 60 * 60 * 1000;
+/** localStorage key holding the recent draft instructions (global history). */
+const DRAFT_INSTRUCTIONS_KEY = 'aic_draft_instructions';
+
+/** How many distinct recent draft-instruction sets to keep. */
+const MAX_DRAFT_INSTRUCTIONS = 5;
+
+/** How long a saved draft item stays valid before it is discarded (24 hours). */
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** The persisted shape of the latest generated draft. */
 export interface SavedDraftOutput {
   draft: string;
   options: DraftEmailOptions;
+  savedAt: number;
+}
+
+/** One entry in the global draft-instructions history. */
+interface SavedDraftInstruction {
+  instructions: string;
   savedAt: number;
 }
 
@@ -266,7 +278,7 @@ export function getDraftOutput(): SavedDraftOutput | null {
       return null;
     }
 
-    if (Date.now() - parsed.savedAt > DRAFT_OUTPUT_TTL_MS) {
+    if (Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
       localStorage.removeItem(DRAFT_OUTPUT_KEY);
       return null;
     }
@@ -281,6 +293,74 @@ export function getDraftOutput(): SavedDraftOutput | null {
 export function clearDraftOutput(): void {
   try {
     localStorage.removeItem(DRAFT_OUTPUT_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Draft instructions persistence (single global slot, 24h TTL, ≤5 distinct)
+// ---------------------------------------------------------------------------
+
+/** Read and prune (24h) the global draft-instructions history. */
+function loadDraftInstructions(): SavedDraftInstruction[] {
+  try {
+    const raw = localStorage.getItem(DRAFT_INSTRUCTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const now = Date.now();
+    const fresh = parsed.filter(
+      (e) => e && typeof e.instructions === 'string' && typeof e.savedAt === 'number' &&
+        now - e.savedAt <= DRAFT_TTL_MS,
+    );
+
+    if (fresh.length !== parsed.length) {
+      localStorage.setItem(DRAFT_INSTRUCTIONS_KEY, JSON.stringify(fresh));
+    }
+    return fresh;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist the draft instructions into a single global history slot — NOT
+ * keyed to any conversation thread (drafts are new emails). Distinct values
+ * are de-duplicated, the newest entry is placed first, and at most
+ * `MAX_DRAFT_INSTRUCTIONS` entries are kept. Content shorter than MIN_LENGTH
+ * characters (after trimming) is ignored.
+ */
+export function saveDraftInstructions(text: string): void {
+  try {
+    const trimmed = (text || '').trim();
+    if (trimmed.length < MIN_LENGTH) return;
+
+    const list = loadDraftInstructions().filter((e) => e.instructions !== trimmed);
+    list.unshift({ instructions: trimmed, savedAt: Date.now() });
+    localStorage.setItem(
+      DRAFT_INSTRUCTIONS_KEY,
+      JSON.stringify(list.slice(0, MAX_DRAFT_INSTRUCTIONS)),
+    );
+  } catch {
+    // localStorage might be unavailable in some sandboxed environments
+  }
+}
+
+/**
+ * Read the most recent draft instructions, or `null` when none is available
+ * (nothing saved, all entries expired, or malformed data). The most recent
+ * distinct value is returned.
+ */
+export function getDraftInstructions(): string | null {
+  const list = loadDraftInstructions();
+  return list.length > 0 ? list[0].instructions : null;
+}
+
+/** Clear the persisted draft instructions history. */
+export function clearDraftInstructions(): void {
+  try {
+    localStorage.removeItem(DRAFT_INSTRUCTIONS_KEY);
   } catch {
     // Ignore
   }

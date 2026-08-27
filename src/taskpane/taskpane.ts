@@ -78,8 +78,9 @@ import {
 import {
   autoSaveEntry,
   getAutoInstructions,
+  saveDraftInstructions,
+  getDraftInstructions,
   getSessionKey,
-  AutoSaveType,
 } from '../features/auto-save';
 import {
   clearConversation,
@@ -447,32 +448,35 @@ function switchTab(tabName: string): void {
 // Reply context loader
 // ---------------------------------------------------------------------------
 
-/** Save both instruction inputs to the current email conversation. */
+/** Save both instruction inputs. Draft uses a global slot (not conversation
+ * threaded); reply stays keyed to the current email conversation. */
 function autoSaveSession(): void {
   try {
     const sessionKey = getSessionKey();
     const draft = ($('draft-instructions') as HTMLTextAreaElement)?.value || '';
     const reply = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
-    autoSaveEntry('draft', draft, sessionKey);
+    saveDraftInstructions(draft);
     autoSaveEntry('reply', reply, sessionKey);
   } catch {
     // Best-effort autosave — never block closing the panel
   }
 }
 
-/** Restore the auto-saved instructions into the currently active tab. */
+/** Restore the auto-saved instructions into the currently active tab.
+ * Draft reads the global slot; reply reads the per-conversation entry. */
 function restoreActiveInstructions(): void {
   try {
     const activeTab = document.querySelector('.aic-tab--active') as HTMLElement | null;
     const tabName = activeTab?.dataset.tab;
-    let type: AutoSaveType = 'reply';
-    if (tabName === 'draft') type = 'draft';
-    else if (tabName !== 'reply') return;
+    if (tabName !== 'draft' && tabName !== 'reply') return;
 
-    const textarea = $(`${type}-instructions`) as HTMLTextAreaElement;
+    const textarea = $(`${tabName}-instructions`) as HTMLTextAreaElement;
     if (!textarea || textarea.value.trim()) return;
 
-    const saved = getAutoInstructions(type, getSessionKey());
+    const saved =
+      tabName === 'draft'
+        ? getDraftInstructions()
+        : getAutoInstructions('reply', getSessionKey());
     if (saved) {
       textarea.value = saved;
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
