@@ -39,7 +39,7 @@ jobs:
           path: ./dist
 
   deploy-dev:
-    needs: build
+    needs: [build,cleanup]
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifact
@@ -66,7 +66,7 @@ jobs:
           keep_files: true
 
   deploy-prod:
-    needs: build
+    needs: [build,cleanup]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +84,16 @@ jobs:
           destination_dir: .
           keep_files: false
           exclude_assets: "dev/**"
-          
-
-
+ 
+   cleanup:
+    if: github.event_name == 'workflow_dispatch' 
+    runs-on: ubuntu-latest
+    permissions:
+      write-all
+    steps:
+      - name: Delete old deployments
+        uses: strumwolf/delete-deployment-environment@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          environment: github-pages
+          onlyRemoveDeployments: true
