@@ -95,4 +95,5 @@ jobs:
         uses: strumwolf/delete-deployment-environment@v4
         with:
           token: ${{ secrets.GH_PAT_TOKEN }}
+          environment: github-pages
           onlyRemoveDeployments: true
