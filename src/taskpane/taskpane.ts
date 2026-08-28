@@ -1489,6 +1489,9 @@ Office.onReady((info) => {
       // Conversation context toggle (Reply toolbar)
       const ctxToggle = $('conversation-context-toggle') as HTMLInputElement | null;
       if (ctxToggle) ctxToggle.checked = s.conversationContextEnabled;
+      // Reply Thread toggle (Reply toolbar) — persisted across sessions
+      const threadToggle = $('reply-include-thread') as HTMLInputElement | null;
+      if (threadToggle) threadToggle.checked = s.includeThread;
       applyConversationFeatureVisibility();
     };
 
@@ -1763,6 +1766,13 @@ Office.onReady((info) => {
       settings.conversationContextEnabled = enabled;
       saveSettings(settings);
       applyConversationFeatureVisibility();
+    });
+
+    // "Thread" toggle (Reply toolbar) — persists the choice across sessions
+    $('reply-include-thread')?.addEventListener('change', (e: Event) => {
+      const settings = loadSettings();
+      settings.includeThread = (e.target as HTMLInputElement).checked;
+      saveSettings(settings);
     });
 
     // --- Summarize ---

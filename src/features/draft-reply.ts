@@ -27,7 +27,7 @@ import {
   EmailContact,
 } from '../services/outlook';
 import { splitThreadHtmlMessages } from '../services/thread-truncate';
-import { cleanEmailMessage } from '../services/email-cleaner';
+import { cleanThreadEmails } from '../services/email-cleaner';
 import { getSessionKey } from './auto-save';
 import {
   appendTurn,
@@ -131,7 +131,7 @@ export function clearEmailContext(): void {
 export function buildThreadBodyText(bodyHtml: string, keepReplies: number): string {
   const fragments = splitThreadHtmlMessages(bodyHtml, keepReplies);
   return fragments
-    .map((fragment) => cleanEmailMessage(emailHtmlToText(fragment)))
+    .map((fragment) => cleanThreadEmails(emailHtmlToText(fragment)))
     .filter((part) => part.length > 0)
     .join('\n\n')
     .replace(/\n{3,}/g, '\n\n')

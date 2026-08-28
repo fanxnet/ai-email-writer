@@ -5,7 +5,11 @@
  * quoted-thread HTML structures produced by different email clients.
  */
 
-import { truncateHtmlThread, splitThreadHtmlMessages } from './thread-truncate';
+import { splitThreadHtmlMessages } from './thread-truncate';
+
+/** Old truncateHtmlThread API: join the newest-messages fragments into one HTML string. */
+const truncateHtmlThread = (html: string, keepReplies = 3): string =>
+  splitThreadHtmlMessages(html, keepReplies).join('');
 
 describe('truncateHtmlThread', () => {
   it('returns empty/blank input unchanged', () => {

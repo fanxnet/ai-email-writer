@@ -78,6 +78,8 @@ export interface AIComposeSettings {
   activeCareerId: string;
   /** Whether the Reply feature keeps per-email conversation context. */
   conversationContextEnabled: boolean;
+  /** Whether the Reply Thread toggle is on (keep more of the original thread). */
+  includeThread: boolean;
   /** Reasoning mode for generation. Defaults to 'off' so model thinking
    * (which shares the maxOutputTokens budget) cannot swallow the output. */
   reasoningMode: ReasoningMode;
@@ -123,6 +125,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   customRules: "",
   activeCareerId: "",
   conversationContextEnabled: true,
+  includeThread: false,
   reasoningMode: "off",
   replyStyleMode: "match-original",
 };

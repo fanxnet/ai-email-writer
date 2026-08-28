@@ -196,18 +196,3 @@ export function splitThreadHtmlMessages(html: string, keepReplies: number): stri
 
   return [html];
 }
-
-/**
- * Truncate a conversation-thread HTML email to the most recent `keepReplies`
- * messages (default 3), dropping older quoted history.
- *
- * Boundary detection is structural and client-agnostic:
- *  1. nested <blockquote> depth (most universal),
- *  2. quoted-message separators / Outlook containers / <hr>,
- *  3. if nothing matches, the input is returned unchanged and downstream
- *     text filtering / character truncation still apply.
- */
-export function truncateHtmlThread(html: string, keepReplies = 3): string {
-  if (!html) return html;
-  return splitThreadHtmlMessages(html, keepReplies).join('');
-}

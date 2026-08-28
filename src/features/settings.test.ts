@@ -71,6 +71,7 @@ function makeSettings(overrides: Partial<AIComposeSettings> = {}): AIComposeSett
     customRules: '',
     activeCareerId: '',
     conversationContextEnabled: true,
+    includeThread: false,
     reasoningMode: 'off',
     replyStyleMode: 'match-original',
     ...overrides,
@@ -121,6 +122,15 @@ describe('saveSettings / loadSettings', () => {
     saveSettings(makeSettings({ draftLanguage: 'Japanese' }));
     const s2 = loadSettings();
     expect(s2.draftLanguage).toBe('Japanese');
+  });
+
+  test('includeThread defaults to false and persists a round-trip', () => {
+    const s1 = loadSettings();
+    expect(s1.includeThread).toBe(false);
+
+    saveSettings(makeSettings({ includeThread: true }));
+    const s2 = loadSettings();
+    expect(s2.includeThread).toBe(true);
   });
 
   test('legacy stored settings without the new fields fall back to defaults', () => {
