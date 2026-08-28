@@ -450,4 +450,75 @@ describe('cleanThreadEmails', () => {
       expect(result).not.toContain('If we consider the disassembled equipments...');
     });
   });
+
+  describe('multilingual sender split and recipient lists', () => {
+    it('splits by From, keeps the sender, and strips a De: recipient list (label-alone format)', () => {
+      const input = [
+        'From:',
+        'Adeline Couto <adeline@mmlogisticsconsulting.com>',
+        '',
+        'De:',
+        'TLM - Angelina Liu <tlm@x.com>,',
+        'QDO - Amy Yu <amy@x.com>',
+        '',
+        'Dear Adeline,',
+        'Long time!',
+        'Just to confirm.',
+        '',
+        'From:',
+        'Larissa Borsatti <larissa@x.com>',
+        '',
+        'De:',
+        'TLM - Angelina Liu <tlm@x.com>',
+        '',
+        'Dear,',
+        'If we consider the disassembled equipments...',
+        'Total 2 pcs 30 tons 277cbm',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('From: Adeline Couto <adeline@mmlogisticsconsulting.com>');
+      expect(result).toContain('Dear Adeline,');
+      expect(result).toContain('Long time!');
+      expect(result).toContain('From: Larissa Borsatti <larissa@x.com>');
+      expect(result).toContain('Total 2 pcs 30 tons 277cbm');
+      expect(result).not.toContain('TLM - Angelina Liu <tlm@x.com>');
+      expect(result).not.toContain('QDO - Amy Yu');
+    });
+
+    it('keeps a De: sender as attribution when it is the first header (FR/PT)', () => {
+      const input = [
+        'Current body.',
+        '',
+        'De:',
+        'Marie Dupont <marie@x.com>',
+        '',
+        'Merci pour votre réponse.',
+        '',
+        'Cordialement,',
+        'Marie Dupont',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('De: Marie Dupont <marie@x.com>');
+      expect(result).toContain('Merci pour votre réponse.');
+      expect(result).not.toContain('Cordialement,');
+    });
+
+    it('keeps a Von: sender as attribution (German)', () => {
+      const input = [
+        'Body.',
+        '',
+        'Von: Max Müller <max@x.com>',
+        'Gesendet am: Montag, 15. Januar 2024 15:00',
+        'An: Anna',
+        'Betreff: RE: Q3',
+        '',
+        'Vielen Dank.',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('Von: Max Müller <max@x.com>');
+      expect(result).toContain('Vielen Dank.');
+      expect(result).not.toContain('Gesendet am');
+      expect(result).not.toContain('Betreff');
+    });
+  });
 });

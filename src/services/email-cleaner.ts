@@ -19,13 +19,13 @@
 
 /** Any header label line (sender or other). */
 const HEADER_LABEL_RE =
-  /^(?:From|发件人|De|Von|Da|Sender|寄件人|Sent|发送时间|发送|Envoyé le|Gesendet am|Enviado|Enviado el|Enviada em|Inviato il|Verzonden|Date|日期|Datum|Fecha|Data|Received|接收时间|Delivered-To|To|收件人|À|An|Para|Cc|CC|抄送|Copie|Bcc|BCC|密送|Cci|CCO|Subject|主题|Objet|Betreff|Asunto|Assunto|Oggetto|Onderwerp|Importance|优先级|Priority|X-Priority|Wichtigkeit|Importancia|Importanza|Importância|Reply-To|回复地址|Message-ID|In-Reply-To|References|MIME-Version|Content-Type|Content-Transfer-Encoding|DKIM-Signature|Authentication-Results|Return-Path|List-Unsubscribe|List-Id)\s*[：:]/i;
+  /^(?:From|发件人|寄件人|Sender|De|Von|Da|Van|Od|От|Sent|发送时间|发送|Envoyé le|Gesendet am|Enviado|Enviado el|Enviada em|Inviato il|Verzonden|Verstuurd|Date|日期|Datum|Fecha|Data|Received|接收时间|Delivered-To|To|收件人|À|An|Aan|Para|Cc|CC|抄送|Copie|Kopie|Bcc|BCC|密送|Cci|CCO|Subject|主题|Objet|Betreff|Asunto|Assunto|Oggetto|Onderwerp|Importance|优先级|Priority|X-Priority|Wichtigkeit|Importancia|Importanza|Importância|Reply-To|回复地址|Message-ID|In-Reply-To|References|MIME-Version|Content-Type|Content-Transfer-Encoding|DKIM-Signature|Authentication-Results|Return-Path|List-Unsubscribe|List-Id)\s*[：:]/i;
 
-/** Sender label (kept as attribution). */
-const SENDER_LABEL_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]/i;
+/** Sender label (kept as attribution, and the split feature). */
+const SENDER_LABEL_RE = /^(?:From|发件人|寄件人|Sender|De|Von|Da|Van|Od|От)\s*[：:]/i;
 
-/** A "From: Name <email>" sender line (kept as attribution, and a message start). */
-const FROM_LINE_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]\s*(.*)$/i;
+/** A "From: Name <email>" sender line (used to exclude senders from body/signature). */
+const FROM_LINE_RE = /^(?:From|发件人|寄件人|Sender|De|Von|Da|Van|Od|От)\s*[：:]\s*(.*)$/i;
 
 // ---------------------------------------------------------------------------
 // Quoted separators / markers / "wrote:" attribution lines
@@ -39,7 +39,7 @@ const MARKER_LINE_RE =
   /^\*{0,2}\s*(?:original\s+(?:email|e-?mail|message)|forwarded\s+(?:message|email)|message\s+d'origine|mensaje\s+original|messaggio\s+originale|mensagem\s+original|ursprüngliche\s+nachricht|转发的?消息|原始邮件)[:：]?\s*\*{0,2}\s*$/i;
 
 const WROTE_LINE_RE =
-  /^(?:On|Le|Am|El|Il|Em|在)\s+.+?(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|写道)\s*[：:]?$/i;
+  /^(?:On|Le|Am|El|Il|Em|在)\s+.+?(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|schreef|napisał|napisała|skrev|писала|написала|写道)\s*[：:]?$/i;
 
 // ---------------------------------------------------------------------------
 // Signatures
@@ -75,6 +75,11 @@ const SIGN_OFF_PHRASES = new Set([
   'obrigado pela atenção', 'com os melhores cumprimentos',
   'met vriendelijke groet', 'met vriendelijke groeten', 'groeten',
   'hartelijke groet', 'bedankt', 'dank je', 'groetjes',
+  'z poważaniem', 'z wyrazami szacunku', 'pozdrawiam',
+  'с уважением', 'с наилучшими пожеланиями', 'всего доброго',
+  's pozdravem', 's pozdravom',
+  '敬具', 'よろしくお願いします', 'お願いします',
+  '감사합니다', '고맙습니다',
 ]);
 
 /** Lowercased copy so any phrase (or user-added name) matches regardless of case. */
@@ -111,13 +116,13 @@ function isSignOffLine(line: string): boolean {
   return words.every((w) => NAME_WORD_RE.test(w));
 }
 
-const GREETING_RE = /^(?:dear|hi|hello|hey|hola|bonjour|hallo|ciao|ol[aá]|greetings|sir|madam)\b/i;
+const GREETING_RE = /^(?:dear|hi|hello|hey|hola|bonjour|hallo|ciao|ol[aá]|hej|hei|moi|greetings|sir|madam|你好|您好|안녕하세요|こんにちは)\b/i;
 
 const ADDRESS_RE =
-  /\b(?:road|street|avenue|ave\.?|blvd|boulevard|lane|drive|plaza|square|bldg|building|room|suite|floor|fl\.?|block|district|province|county|邮编|路|街|大道|大厦|楼|号|区|广场|新村|社区)\b/i;
+  /\b(?:road|street|avenue|ave\.?|blvd|boulevard|lane|drive|plaza|square|bldg|building|room|suite|floor|fl\.?|block|district|province|county|邮编|路|街|大道|大厦|楼|号|区|广场|新村|社区|市|街道|국가)\b/i;
 
 const SIGNATURE_LABEL_RE =
-  /^(?:add(?:ress)?:|tel(?:ephone)?:|fax:|mobile:|mob:|phone:|email:|e-?mail:|website:|web:|group:|nvocc:|office:|whatsapp:|wechat:|skype:|qq:|reg(?:istered)?:|co:|c\/o|vat:|registered:|www\.|p\.?\s*o\.?\s*box|postal)/i;
+  /^(?:add(?:ress)?:|tel(?:ephone)?:|fax:|mobile:|mob:|phone:|email:|e-?mail:|website:|web:|group:|nvocc:|office:|whatsapp:|wechat:|skype:|qq:|reg(?:istered)?:|co:|c\/o|vat:|registered:|www\.|p\.?\s*o\.?\s*box|postal|电话|手机|邮箱|网址|地址|传真|tél|teléfono|telefone|telefon|endereço|enderezo)/i;
 
 const ABBREV_END_RE = /(?:ltd\.|inc\.|co\.|corp\.|s\.l\.|s\.a\.|llc|sas|sarl|pty|b\.v\.|n\.v\.|lda\.|gmbh|ag)$/i;
 
@@ -247,25 +252,44 @@ const ATTACHMENT_LINE_RE = /^(?:Attachment|Attachments|附件|附件文件)\s*[:
 // ---------------------------------------------------------------------------
 
 /**
- * Split flattened thread text into individual messages. A new message starts
- * at a quoted separator line, an "On ... wrote:" line, or a "From:" sender
- * line that is not part of the header block right after a separator.
+ * Split flattened thread text into individual messages. A new message starts at
+ * a quoted separator line, an "On ... wrote:" line, or a multilingual sender
+ * label ("From:"/"发件人:"/"De:"/"Von:"/"Da:"/"Van:"/...) that begins a message.
+ *
+ * Sender labels that merely open a header block (e.g. a "De:" recipient list
+ * following the "From:" of the same message) do NOT start a new message: a
+ * sender label is a message start only when the previous meaningful line was
+ * body content (or nothing), not another header block.
  * Returns the messages in the same order as the text (newest first).
  */
 function splitMessages(text: string): string[] {
   const lines = text.split('\n');
   const starts: number[] = [];
-  let lastStart = -10;
+  let lastWasHeader = false; // the previous meaningful (non-blank) line was header content
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (SEPARATOR_LINE_RE.test(line) || WROTE_LINE_RE.test(line)) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue; // blank lines keep the header state
+
+    if (SEPARATOR_LINE_RE.test(trimmed) || WROTE_LINE_RE.test(trimmed)) {
       starts.push(i);
-      lastStart = i;
-    } else if (FROM_LINE_RE.test(line) && i - lastStart > 2) {
-      starts.push(i);
-      lastStart = i;
+      lastWasHeader = true; // a quoted header block follows a separator
+      continue;
     }
+
+    if (SENDER_LABEL_RE.test(trimmed)) {
+      if (!lastWasHeader) starts.push(i);
+      lastWasHeader = true;
+      continue;
+    }
+
+    if (HEADER_LABEL_RE.test(trimmed)) {
+      lastWasHeader = true;
+      continue;
+    }
+
+    // A plain line: header value if still in a header block, body otherwise.
+    lastWasHeader = isBodyLikeLine(trimmed) ? false : lastWasHeader;
   }
 
   if (starts.length === 0) return [text];
