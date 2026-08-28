@@ -68,6 +68,30 @@ const HR_RE = /<hr\b[^>]*\/?>/gi;
 /** Drop strong markers that sit within this many chars of an earlier marker. */
 const STRONG_WINDOW = 30;
 
+/** Text "From:"/"De:"-style sender labels that start a quoted message. */
+const HTML_FROM_LABEL_RE = /\b(?:From|De|Von|Da|Sender)\b|发件人|寄件人/gi;
+
+/** A From marker is absorbed by a preceding separator/container within this distance. */
+const FROM_AFTER_STRONG_WINDOW = 120;
+
+/**
+ * Positions of text "From:"/"De:"-style sender markers in the HTML. The label
+ * must be immediately followed (tags/whitespace allowed) by a colon, so body
+ * sentences like "From the meeting at 3:00" are not treated as markers.
+ */
+function findHtmlFromMarkers(html: string): number[] {
+  const positions: number[] = [];
+  let m: RegExpExecArray | null;
+  HTML_FROM_LABEL_RE.lastIndex = 0;
+  while ((m = HTML_FROM_LABEL_RE.exec(html))) {
+    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 60);
+    if (/^(?:(?:<[^>]*>|\s)*?)[:：]/.test(after)) {
+      positions.push(m.index);
+    }
+  }
+  return positions;
+}
+
 /**
  * Deduplicate a sorted list of boundary indexes: two markers closer than
  * `STRONG_WINDOW` chars almost certainly describe the same quoted message.
@@ -111,15 +135,20 @@ function splitAtSeparators(html: string, keepReplies: number): string[] | null {
   }
 
   const strongMarkers = dedupe(strong);
+  // A text "From:" marker that merely follows a separator/container's header is
+  // absorbed into that message; only standalone markers start a new message.
+  const fromMarkers = findHtmlFromMarkers(html).filter(
+    (f) => !strongMarkers.some((s) => f - s > 0 && f - s < FROM_AFTER_STRONG_WINDOW),
+  );
+
+  const primary = dedupe([...strongMarkers, ...fromMarkers]);
   let boundaries: number[];
-  if (strongMarkers.length >= keepReplies) {
-    boundaries = strongMarkers;
+  if (primary.length >= keepReplies) {
+    boundaries = primary;
   } else {
-    // Strong markers are insufficient — supplement with <hr> boundaries, but
-    // ignore an <hr> that merely decorates a strong marker's own message.
-    const merged = [...strongMarkers];
+    const merged = [...primary];
     for (const hr of hrs) {
-      if (strongMarkers.some((s) => Math.abs(hr - s) < STRONG_WINDOW)) continue;
+      if (primary.some((s) => Math.abs(hr - s) < STRONG_WINDOW)) continue;
       merged.push(hr);
     }
     boundaries = merged.sort((a, b) => a - b);

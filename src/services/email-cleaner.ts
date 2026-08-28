@@ -294,7 +294,7 @@ function removeTailFromIndex(lines: string[], index: number): string[] {
 }
 
 /** Clean a single message: headers, separators, markers, signature, disclaimer, placeholders. */
-function cleanMessage(message: string): string {
+export function cleanEmailMessage(message: string): string {
   const lines = message.split('\n');
 
   const kept: string[] = [];
@@ -341,6 +341,6 @@ export function cleanThreadEmails(text: string, keepReplies?: number): string {
   const messages = splitMessages(text);
   const capped = keepReplies !== undefined ? messages.slice(0, Math.max(1, keepReplies)) : messages;
 
-  const cleaned = capped.map(cleanMessage).filter((m) => m.length > 0);
+  const cleaned = capped.map(cleanEmailMessage).filter((m) => m.length > 0);
   return cleaned.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
 }

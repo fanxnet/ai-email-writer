@@ -219,4 +219,31 @@ describe('splitThreadHtmlMessages', () => {
     expect(parts[1]).not.toMatch(/^id="divRplyFwdMsg"/);
     expect(parts[1]).toContain('Reply body.');
   });
+
+  it('splits at a standalone text From marker even without a structural container', () => {
+    const html = [
+      '<html><body>',
+      '<p>Current body.</p>',
+      '<div class="WordSection1"><p>From: Larissa Borsatti &lt;larissa@x.com&gt;</p><p>Reply body.</p></div>',
+      '</body></html>',
+    ].join('');
+    const parts = splitThreadHtmlMessages(html, 3);
+    expect(parts).toHaveLength(2);
+    expect(parts[1]).toContain('From: Larissa Borsatti');
+    expect(parts[1]).toContain('Reply body.');
+  });
+
+  it('absorbs a From marker that follows a separator into that message', () => {
+    const html = [
+      '<html><body>',
+      '<p>Current.</p>',
+      '<p>-----Original Message-----</p><p>From: A</p><p>Reply 1.</p>',
+      '<p>-----Original Message-----</p><p>From: B</p><p>Reply 2.</p>',
+      '</body></html>',
+    ].join('');
+    const parts = splitThreadHtmlMessages(html, 3);
+    expect(parts).toHaveLength(3);
+    expect(parts[1]).toContain('Reply 1.');
+    expect(parts[2]).toContain('Reply 2.');
+  });
 });

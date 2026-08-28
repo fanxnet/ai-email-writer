@@ -352,4 +352,38 @@ describe('generateReply quoted content filtering', () => {
     const prompt = mockGenerateText.mock.calls[0][0] as string;
     expect(prompt).toContain('Hi, please review the attached document by Friday.');
   });
+
+  it('keeps the third message when the second message signature is removed (divRplyFwdMsg chain)', async () => {
+    const html = [
+      '<html><body>',
+      '<div class="WordSection1">',
+      '<p>Current email body.</p>',
+      '<p>From: Juliana Correia &lt;juliana@x.com&gt;</p><p>Subject: RE: Quote</p>',
+      '<p>Dear Angelina,</p><p>Do you believe we can match it?</p>',
+      '</div>',
+      '<div id="divRplyFwdMsg" dir="ltr">',
+      '<p>De: TLM - Angelina Liu &lt;tlm@x.com&gt;</p><p>Dear Larissa,</p>',
+      '<p>Excited to work on this!</p>',
+      '<p>2504, A Bldg., Shenzhen</p><p>Tel: +86</p><p>NVOCC: MOC</p>',
+      '</div>',
+      '<div class="WordSection1">',
+      '<p>From: Larissa Borsatti &lt;larissa@x.com&gt;</p><p>Dear,</p>',
+      '<p>If we consider the disassembled equipments...</p><p>Total 2 pcs 30 tons 277cbm</p>',
+      '</div>',
+      '</body></html>',
+    ].join('');
+    mockGetHtml.mockResolvedValue(html);
+    mockGenerateText.mockResolvedValue('Reply');
+
+    await generateReply({ ...options(), includeThread: true });
+
+    const prompt = mockGenerateText.mock.calls[0][0] as string;
+    expect(prompt).toContain('From: Juliana Correia');
+    expect(prompt).toContain('De: TLM - Angelina Liu');
+    expect(prompt).toContain('From: Larissa Borsatti');
+    expect(prompt).not.toContain('2504, A Bldg.');
+    expect(prompt).not.toContain('NVOCC:');
+    expect(prompt).not.toContain('divRplyFwdMsg');
+    expect(prompt).toContain('Total 2 pcs 30 tons 277cbm');
+  });
 });
