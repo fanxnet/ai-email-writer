@@ -210,6 +210,8 @@ export async function generateReply(
     includeOriginal: options.includeOriginal !== false,
     language: options.language,
     reasoningMode: options.reasoningMode,
+    includeThread: options.includeThread === true,
+    goalText: options.goalText,
   });
 
   return reply;
@@ -237,6 +239,8 @@ export function restoreFromHistory(key: string): { reply: string; options: Draft
         includeOriginal: record.lastRequest.includeOriginal !== false,
         language: record.lastRequest.language || 'auto',
         reasoningMode: (record.lastRequest.reasoningMode as ReasoningMode) || 'off',
+        includeThread: record.lastRequest.includeThread === true,
+        goalText: record.lastRequest.goalText,
       }
     : {
         instructions: lastUser?.content || '',

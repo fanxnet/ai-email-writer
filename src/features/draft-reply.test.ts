@@ -8,7 +8,7 @@
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
-import { generateReply, refineReply, restoreFromHistory, clearEmailContext } from './draft-reply';
+import { generateReply, refineReply, regenerateReply, restoreFromHistory, clearEmailContext } from './draft-reply';
 import { getConversation, appendTurn, rememberLastRequest } from './conversation-memory';
 import { getCurrentEmailBodyHtml } from '../services/outlook';
 
@@ -186,6 +186,30 @@ describe('restoreFromHistory', () => {
     const restored = restoreFromHistory(SESSION_KEY);
     expect(restored?.reply).toBe('Saved answer');
     expect(restored?.options.tone).toBe('formal');
+  });
+
+  it('preserves includeThread and goalText across a restore (reload + Regenerate)', async () => {
+    mockGenerateText.mockResolvedValueOnce('Reply body');
+    await generateReply({
+      instructions: 'Draft a reply',
+      tone: 'professional',
+      includeOriginal: true,
+      language: 'auto',
+      includeThread: true,
+      goalText: 'Write as a senior logistics manager.',
+    });
+
+    // Simulate a reload: the reply is restored from history, then Regenerated.
+    const restored = restoreFromHistory(SESSION_KEY);
+    expect(restored).not.toBeNull();
+    expect(restored!.options.includeThread).toBe(true);
+    expect(restored!.options.goalText).toBe('Write as a senior logistics manager.');
+
+    mockGenerateText.mockResolvedValueOnce('Regenerated');
+    await regenerateReply();
+
+    const prompt = mockGenerateText.mock.calls[1][0] as string;
+    expect(prompt).toContain('Write as a senior logistics manager.');
   });
 
   it('returns null when there is no history to restore', () => {

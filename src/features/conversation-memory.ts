@@ -45,6 +45,8 @@ export interface LastRequest {
   includeOriginal: boolean;
   language?: string;
   reasoningMode?: string;
+  includeThread?: boolean;
+  goalText?: string;
 }
 
 export interface ReplyContextBlock {
