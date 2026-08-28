@@ -148,7 +148,8 @@ export async function generateReply(
   // Both are truncated on the HTML structure, then cleaned message-by-message.
   const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
 //  const emailBody = buildThreadBodyText(context.bodyHtml ?? '', KEEP_REPLIES);
-  const emailBody = context.bodyHtml;
+  const emailBody = emailHtmlToText(context.bodyHtml, { stripQuoted: false });
+//  const emailBody = context.bodyHtml;
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
