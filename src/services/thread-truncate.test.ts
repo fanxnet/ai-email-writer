@@ -5,7 +5,7 @@
  * quoted-thread HTML structures produced by different email clients.
  */
 
-import { truncateHtmlThread } from './thread-truncate';
+import { truncateHtmlThread, splitThreadHtmlMessages } from './thread-truncate';
 
 describe('truncateHtmlThread', () => {
   it('returns empty/blank input unchanged', () => {
@@ -139,5 +139,69 @@ describe('truncateHtmlThread', () => {
       expect(result).toContain('Reply 2.');
       expect(result).not.toContain('Reply 3.');
     });
+  });
+});
+
+describe('splitThreadHtmlMessages', () => {
+  const nested = (levels: number): string => {
+    let inner = `<p>Reply ${levels + 1} body (oldest).</p>`;
+    for (let i = levels; i >= 1; i--) {
+      inner = `<blockquote><p>Reply ${i} body.</p>${inner}</blockquote>`;
+    }
+    return `<html><body><p>Current reply body text.</p>${inner}</body></html>`;
+  };
+
+  it('returns [] for blank input', () => {
+    expect(splitThreadHtmlMessages('', 3)).toEqual([]);
+  });
+
+  it('returns a single fragment when no structural boundary exists', () => {
+    const html = '<html><body><p>Just a message.</p></body></html>';
+    const parts = splitThreadHtmlMessages(html, 3);
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toContain('Just a message.');
+  });
+
+  it('splits a blockquote thread into one fragment per message (newest first)', () => {
+    const parts = splitThreadHtmlMessages(nested(4), 3);
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toContain('Current reply body text.');
+    expect(parts[1]).toContain('Reply 1 body.');
+    expect(parts[2]).toContain('Reply 2 body.');
+    expect(parts[0]).not.toContain('Reply 1 body.');
+    expect(parts[1]).not.toContain('Reply 2 body.');
+  });
+
+  it('unwraps blockquote tags in each kept fragment', () => {
+    const parts = splitThreadHtmlMessages(nested(2), 3);
+    expect(parts[1]).toContain('<div>');
+    expect(parts[1]).not.toContain('<blockquote');
+  });
+
+  it('splits a separator thread into one fragment per message', () => {
+    const html = [
+      '<html><body>',
+      '<p>Current body.</p>',
+      '<p>-----Original Message-----</p><p>From: A</p><p>Reply 1 body.</p>',
+      '<p>-----Original Message-----</p><p>From: B</p><p>Reply 2 body.</p>',
+      '<p>-----Original Message-----</p><p>From: C</p><p>Reply 3 body.</p>',
+      '</body></html>',
+    ].join('');
+    const parts = splitThreadHtmlMessages(html, 3);
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toContain('Current body.');
+    expect(parts[1]).toContain('Reply 1 body.');
+    expect(parts[2]).toContain('Reply 2 body.');
+    expect(parts[2]).not.toContain('Reply 3 body.');
+  });
+
+  it('caps the number of fragments at keepReplies', () => {
+    const parts = splitThreadHtmlMessages(nested(6), 3);
+    expect(parts).toHaveLength(3);
+  });
+
+  it('returns all messages when fewer than keepReplies exist', () => {
+    const parts = splitThreadHtmlMessages(nested(2), 3);
+    expect(parts).toHaveLength(3);
   });
 });

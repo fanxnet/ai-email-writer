@@ -274,5 +274,80 @@ describe('cleanThreadEmails', () => {
       expect(result).toContain('Please find attached the Q3 report.');
       expect(result).not.toContain('Do you have the Q3 numbers ready?');
     });
+
+    it('removes the signature of every message (not just the last one)', () => {
+      const input = [
+        'Hi Bob, please review the attached plan.',
+        '',
+        'Best regards,',
+        'Angelina Liu',
+        'Senior Manager, Acme Inc.',
+        'Tel: +1-555-0100',
+        '',
+        '-----Original Message-----',
+        'From: Bob Johnson',
+        'Sent: Monday, January 15, 2024 3:00 PM',
+        'To: Angelina Liu',
+        'Subject: RE: Project plan',
+        '',
+        'Thanks for sending the plan, I will review it today.',
+        '',
+        'Thanks,',
+        'Bob Johnson',
+        'Finance Lead',
+        'Acme Inc.',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('Hi Bob, please review the attached plan.');
+      expect(result).toContain('Reply from Bob Johnson:');
+      expect(result).toContain('Thanks for sending the plan, I will review it today.');
+      expect(result).not.toContain('Angelina Liu');
+      expect(result).not.toContain('Best regards,');
+      expect(result).not.toContain('Finance Lead');
+      expect(result).not.toContain('Acme Inc.');
+      expect(result).not.toContain('Tel:');
+    });
+  });
+
+  describe('blank-line normalization', () => {
+    it('collapses 3+ consecutive newlines to a single blank line', () => {
+      const input = [
+        'First paragraph.',
+        '',
+        '',
+        'Second paragraph.',
+        '',
+        '',
+        '',
+        'Third paragraph.',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('First paragraph.\n\nSecond paragraph.');
+      expect(result).toContain('Second paragraph.\n\nThird paragraph.');
+      expect(result).not.toContain('\n\n\n');
+    });
+
+    it('joins messages with a single blank line', () => {
+      const input = [
+        'Current email body.',
+        '',
+        '-----Original Message-----',
+        'From: Bob',
+        '',
+        'Reply body.',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toBe('Current email body.\n\nReply from Bob:\nReply body.');
+    });
+  });
+
+  describe('sign-off phrase matching', () => {
+    it('matches sign-off phrases case-insensitively', () => {
+      const input = ['Meeting tomorrow at 10.', '', 'Best Regards, Alice Chen'].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('Meeting tomorrow at 10.');
+      expect(result).not.toContain('Best Regards');
+      expect(result).not.toContain('Alice Chen');
+    });
   });
 });

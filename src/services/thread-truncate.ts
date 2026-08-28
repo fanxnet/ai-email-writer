@@ -18,63 +18,38 @@ const BLOCKQUOTE_OPEN_RE = /<blockquote\b[^>]*>/gi;
 const BLOCKQUOTE_CLOSE_RE = /<\/blockquote\s*>/gi;
 
 /**
- * Cut the HTML so only the newest `keepReplies` messages remain when the
- * thread is built from nested <blockquote> elements (Gmail, Outlook Web,
- * Yahoo, Apple Mail, Thunderbird). Kept blockquotes are unwrapped to <div> so
- * the later HTML→text conversion does not strip the messages we want to keep;
- * everything from the first blockquote at depth `keepReplies` onward (older
- * history) is dropped.
+ * Split the HTML into per-message fragments when the thread is built from
+ * nested <blockquote> elements (Gmail, Outlook Web, Yahoo, Apple Mail,
+ * Thunderbird). The first fragment is the current email; each following
+ * fragment is one quoted reply. Kept blockquotes are unwrapped to <div> so the
+ * later HTML→text conversion keeps their content.
  *
  * Returns `null` when the HTML contains no blockquotes, signalling the caller
  * to fall back to the separator strategy.
  */
-function cutAtBlockquoteDepth(html: string, keepReplies: number): string | null {
+function splitByBlockquoteDepth(html: string, keepReplies: number): string[] | null {
   if (!/<blockquote\b/i.test(html)) return null;
 
-  interface BoundaryEvent {
-    index: number;
-    open: boolean;
-    raw: string;
-  }
-
-  const events: BoundaryEvent[] = [];
+  const opens: number[] = [];
   let m: RegExpExecArray | null;
-
   BLOCKQUOTE_OPEN_RE.lastIndex = 0;
   while ((m = BLOCKQUOTE_OPEN_RE.exec(html))) {
-    events.push({ index: m.index, open: true, raw: m[0] });
-  }
-  BLOCKQUOTE_CLOSE_RE.lastIndex = 0;
-  while ((m = BLOCKQUOTE_CLOSE_RE.exec(html))) {
-    events.push({ index: m.index, open: false, raw: m[0] });
-  }
-  events.sort((a, b) => a.index - b.index);
-
-  const parts: string[] = [];
-  let depth = 0;
-  let cursor = 0;
-
-  for (const ev of events) {
-    if (ev.open) {
-      if (depth >= keepReplies - 1) {
-        // Opening a blockquote at depth `keepReplies` → older thread history.
-        parts.push(html.slice(cursor, ev.index));
-        return parts.join('');
-      }
-      parts.push(html.slice(cursor, ev.index), '<div>');
-      depth += 1;
-      cursor = ev.index + ev.raw.length;
-    } else {
-      parts.push(html.slice(cursor, ev.index), '</div>');
-      depth = Math.max(0, depth - 1);
-      cursor = ev.index + ev.raw.length;
-    }
+    opens.push(m.index);
   }
 
-  // Fewer quoted replies than keepReplies: keep everything, preserving the
-  // unwrapped form so emailHtmlToText does not strip the quoted messages.
-  parts.push(html.slice(cursor));
-  return parts.join('');
+  const keep = Math.min(keepReplies, opens.length + 1);
+  const fragments: string[] = [];
+  for (let j = 0; j < keep; j++) {
+    const start = j === 0 ? 0 : opens[j - 1];
+    const end = j < opens.length ? opens[j] : html.length;
+    fragments.push(
+      html
+        .slice(start, end)
+        .replace(BLOCKQUOTE_OPEN_RE, '<div>')
+        .replace(BLOCKQUOTE_CLOSE_RE, '</div>'),
+    );
+  }
+  return fragments;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,12 +87,14 @@ function hasRealContentBefore(html: string, index: number): boolean {
 }
 
 /**
- * Cut the HTML so only the newest `keepReplies` messages remain using generic
- * quoted-message separators and container markers (Classic Outlook and others
- * that do not nest <blockquote>). Returns `null` when no boundary is found or
- * when the body is a forward whose "original" block is its own content.
+ * Split the HTML into per-message fragments using generic quoted-message
+ * separators and container markers (Classic Outlook and others that do not
+ * nest <blockquote>). The first fragment is the current email; each following
+ * fragment is one quoted reply. Returns `null` when no boundary is found, and
+ * returns a single fragment when the body is a forward whose "original" block
+ * is its own content.
  */
-function cutAtSeparator(html: string, keepReplies: number): string | null {
+function splitAtSeparators(html: string, keepReplies: number): string[] | null {
   const strong: number[] = [];
   const hrs: number[] = [];
   let m: RegExpExecArray | null;
@@ -132,39 +109,62 @@ function cutAtSeparator(html: string, keepReplies: number): string | null {
   }
 
   const strongMarkers = dedupe(strong);
+  let boundaries: number[];
   if (strongMarkers.length >= keepReplies) {
-    return cutAtIndex(html, strongMarkers, keepReplies);
+    boundaries = strongMarkers;
+  } else {
+    // Strong markers are insufficient — supplement with <hr> boundaries, but
+    // ignore an <hr> that merely decorates a strong marker's own message.
+    const merged = [...strongMarkers];
+    for (const hr of hrs) {
+      if (strongMarkers.some((s) => Math.abs(hr - s) < STRONG_WINDOW)) continue;
+      merged.push(hr);
+    }
+    boundaries = merged.sort((a, b) => a - b);
   }
 
-  // Strong markers are insufficient — supplement with <hr> boundaries, but
-  // ignore an <hr> that merely decorates a strong marker's own message.
-  const boundaries = [...strongMarkers];
-  for (const hr of hrs) {
-    if (strongMarkers.some((s) => Math.abs(hr - s) < STRONG_WINDOW)) continue;
-    boundaries.push(hr);
-  }
-  boundaries.sort((a, b) => a - b);
-
-  return cutAtIndex(html, boundaries, keepReplies);
-}
-
-/** Cut just before the `keepReplies`-th boundary, with forward-preservation guard. */
-function cutAtIndex(html: string, boundaries: number[], keepReplies: number): string | null {
   if (boundaries.length === 0) return null;
 
   // If the first boundary sits at the very top of the body, this is a
-  // forwarded message whose "original" content is the actual body — preserve it.
-  if (!hasRealContentBefore(html, boundaries[0])) return null;
+  // forwarded message whose "original" content is the actual body — keep it whole.
+  if (!hasRealContentBefore(html, boundaries[0])) return [html];
 
-  const cutIndex = boundaries[keepReplies - 1];
-  if (cutIndex === undefined) return null; // fewer boundaries than keepReplies
-
-  return html.slice(0, cutIndex);
+  const keep = Math.min(keepReplies, boundaries.length + 1);
+  const fragments: string[] = [];
+  for (let j = 0; j < keep; j++) {
+    const start = j === 0 ? 0 : boundaries[j - 1];
+    const end = j < boundaries.length ? boundaries[j] : html.length;
+    fragments.push(html.slice(start, end));
+  }
+  return fragments;
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Split a conversation-thread HTML email into its most recent `keepReplies`
+ * messages as individual HTML fragments (newest first: the current email, then
+ * each newer-to-older quoted reply).
+ *
+ * Boundary detection is structural and client-agnostic:
+ *  1. nested <blockquote> depth (most universal),
+ *  2. quoted-message separators / Outlook containers / <hr>,
+ *  3. if nothing matches, the whole HTML is returned as a single fragment.
+ */
+export function splitThreadHtmlMessages(html: string, keepReplies: number): string[] {
+  if (!html) return [];
+  const k = Math.max(1, Math.floor(keepReplies));
+
+  const byBlockquote = splitByBlockquoteDepth(html, k);
+  if (byBlockquote !== null) return byBlockquote;
+
+  const bySeparator = splitAtSeparators(html, k);
+  if (bySeparator !== null) return bySeparator;
+
+  return [html];
+}
 
 /**
  * Truncate a conversation-thread HTML email to the most recent `keepReplies`
@@ -178,13 +178,5 @@ function cutAtIndex(html: string, boundaries: number[], keepReplies: number): st
  */
 export function truncateHtmlThread(html: string, keepReplies = 3): string {
   if (!html) return html;
-  const k = Math.max(1, Math.floor(keepReplies));
-
-  const byBlockquote = cutAtBlockquoteDepth(html, k);
-  if (byBlockquote !== null) return byBlockquote;
-
-  const bySeparator = cutAtSeparator(html, k);
-  if (bySeparator !== null) return bySeparator;
-
-  return html;
+  return splitThreadHtmlMessages(html, keepReplies).join('');
 }

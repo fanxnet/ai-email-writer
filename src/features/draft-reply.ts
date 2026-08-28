@@ -26,7 +26,7 @@ import {
   emailHtmlToText,
   EmailContact,
 } from '../services/outlook';
-import { truncateHtmlThread } from '../services/thread-truncate';
+import { splitThreadHtmlMessages } from '../services/thread-truncate';
 import { cleanThreadEmails } from '../services/email-cleaner';
 import { getSessionKey } from './auto-save';
 import {
@@ -120,17 +120,22 @@ export function clearEmailContext(): void {
 }
 
 /**
- * Build the email body text for a reply prompt: structurally truncate the
- * raw thread HTML to the newest `keepReplies` messages, flatten to text, then
- * clean each message (headers, signatures, disclaimers, placeholders) while
- * keeping a compact "Reply from X:" attribution.
+ * Build the email body text for a reply prompt: split the raw thread HTML into
+ * its newest `keepReplies` messages structurally (blockquote depth /
+ * separators / Outlook containers), then flatten and clean EACH message
+ * independently (headers, signatures, disclaimers, placeholders) while keeping
+ * a compact "Reply from X:" attribution. Paragraphs are separated by a single
+ * blank line.
  * Used by both the reply and suggest-replies flows.
  */
 export function buildThreadBodyText(bodyHtml: string, keepReplies: number): string {
-  return cleanThreadEmails(
-    emailHtmlToText(truncateHtmlThread(bodyHtml, keepReplies)),
-    keepReplies,
-  );
+  const fragments = splitThreadHtmlMessages(bodyHtml, keepReplies);
+  return fragments
+    .map((fragment) => cleanThreadEmails(emailHtmlToText(fragment)))
+    .filter((part) => part.length > 0)
+    .join('\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /**

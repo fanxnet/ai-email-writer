@@ -45,25 +45,34 @@ const FROM_LINE_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]\s*
  * phrase must match exactly.
  */
 const SIGN_OFF_PHRASES = new Set([
-  'Angelina Liu', 'regards', 'best regards', 'kind regards', 'warm regards', 'many regards',
-  'sincerely', 'sincerely yours', 'yours sincerely', 'yours faithfully', 'yours truly',
-  'truly', 'thanks', 'thank you', 'cheers', 'respectfully', 'best', 'appreciated',
-  'take care', 'all the best', 'wishes', 'best wishes', 'with regards',
-  'with kind regards', 'many thanks',
-  '此致敬礼', '此致', '敬礼', '祝好', '祝一切顺利', '顺颂商祺', '商祺', '谢谢', '感谢',
-  '谨上', '敬上', '敬启',
+  'regards', 'angelina liu', 'best regards', 'kind regards', 'warm regards', 'warmest regards',
+  'kindest regards', 'many regards', 'sincerely', 'sincerely yours',
+  'yours sincerely', 'yours faithfully', 'yours truly', 'respectfully yours',
+  'truly', 'thanks', 'thanks a lot', 'many thanks', 'thank you', 'cheers',
+  'respectfully', 'best', 'appreciated', 'take care', 'all the best', 'all best',
+  'wishes', 'best wishes', 'with regards', 'with kind regards', 'gratefully',
+  'yours', 'thanks again',
+  '此致敬礼', '此致', '敬礼', '祝好', '祝一切顺利', '顺颂商祺', '商祺', '谢谢',
+  '感谢', '谨上', '敬上', '敬启', '顺颂时祺', '此致，敬礼',
   'cordialement', 'bien à vous', 'bien a vous', 'salutations', 'meilleures salutations',
-  'bien cordialement', 'merci', 'amitiés',
-  'mit freundlichen grüßen', 'mit freundlichem gruß', 'viele grüße',
-  'freundliche grüße', 'beste grüße', 'grüße', 'grüsse', 'hochachtungsvoll', 'danke',
-  'saludos', 'un saludo', 'atentamente', 'cordialmente', 'muchas gracias', 'gracias',
-  'reciba un cordial saludo',
-  'cordiali saluti', 'saluti', 'distinti saluti', 'un caro saluto', 'grazie',
+  'bien cordialement', 'merci', 'merci beaucoup', 'amitiés', 'bonne journée',
+  'mit freundlichen grüßen', 'mit freundlichem gruß', 'mit besten grüßen',
+  'viele grüße', 'freundliche grüße', 'beste grüße', 'liebe grüße',
+  'schöne grüße', 'grüße', 'grüsse', 'hochachtungsvoll', 'danke', 'danke schön',
+  'saludos', 'un saludo', 'un cordial saludo', 'atentamente', 'cordialmente',
+  'muchas gracias', 'gracias', 'reciba un cordial saludo',
+  'cordiali saluti', 'distinti saluti', 'un caro saluto', 'un cordiale saluto',
+  'saluti', 'grazie',
   'atenciosamente', 'cordialmente', 'obrigado', 'obrigada', 'cumprimentos',
-  'com os melhores cumprimentos',
-  'met vriendelijke groet', 'met vriendelijke groeten', 'groeten', 'hartelijke groet',
-  'bedankt', 'dank je',
+  'obrigado pela atenção', 'com os melhores cumprimentos',
+  'met vriendelijke groet', 'met vriendelijke groeten', 'groeten',
+  'hartelijke groet', 'bedankt', 'dank je', 'groetjes',
 ]);
+
+/** Lowercased copy so any phrase (or user-added name) matches regardless of case. */
+const SIGN_OFF_PHRASES_LOWER = new Set(
+  [...SIGN_OFF_PHRASES].map((p) => p.toLowerCase()),
+);
 
 /** A name word: capitalized Latin, or a short CJK run. */
 const NAME_WORD_RE = /^(?:[A-ZÀ-ÖØ-öø-ÿ][\w'.-]*|[\u4e00-\u9fff]{1,6})$/;
@@ -77,7 +86,7 @@ function isSignOffLine(line: string): boolean {
   const tail = commaIndex < 0 ? '' : s.slice(commaIndex + 1);
 
   const phrase = phraseRaw.replace(/[.!。！]+$/, '').toLowerCase();
-  if (!SIGN_OFF_PHRASES.has(phrase)) return false;
+  if (!SIGN_OFF_PHRASES_LOWER.has(phrase)) return false;
 
   if (!tail) return true;
   const words = tail.split(/\s+/).filter(Boolean);
