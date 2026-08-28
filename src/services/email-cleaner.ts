@@ -45,7 +45,7 @@ const FROM_LINE_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]\s*
  * phrase must match exactly.
  */
 const SIGN_OFF_PHRASES = new Set([
-  'regards', 'best regards', 'kind regards', 'warm regards', 'many regards',
+  'Angelina Liu', 'regards', 'best regards', 'kind regards', 'warm regards', 'many regards',
   'sincerely', 'sincerely yours', 'yours sincerely', 'yours faithfully', 'yours truly',
   'truly', 'thanks', 'thank you', 'cheers', 'respectfully', 'best', 'appreciated',
   'take care', 'all the best', 'wishes', 'best wishes', 'with regards',
