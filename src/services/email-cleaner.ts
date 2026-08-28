@@ -107,6 +107,9 @@ function isSignOffLine(line: string): boolean {
 
 const GREETING_RE = /^(?:dear|hi|hello|hey|hola|bonjour|hallo|ciao|ol[aá]|greetings|sir|madam)\b/i;
 
+const ADDRESS_RE =
+  /\b(?:road|street|avenue|ave\.?|blvd|boulevard|lane|drive|plaza|square|bldg|building|room|suite|floor|fl\.?|block|district|province|county|邮编|路|街|大道|大厦|楼|号|区|广场|新村|社区)\b/i;
+
 const SIGNATURE_LABEL_RE =
   /^(?:add(?:ress)?:|tel(?:ephone)?:|fax:|mobile:|mob:|phone:|email:|e-?mail:|website:|web:|group:|nvocc:|office:|whatsapp:|wechat:|skype:|qq:|reg(?:istered)?:|co:|c\/o|vat:|registered:|www\.|p\.?\s*o\.?\s*box|postal)/i;
 
@@ -124,13 +127,18 @@ function isStrongSignatureLine(line: string): boolean {
   return false;
 }
 
-/** A line that looks like signature content (strong, or a short non-sentence line). */
+/** A line that looks like signature content (strong, address, or a short non-sentence line). */
 function isSignatureLike(line: string): boolean {
   const s = line.trim();
   if (!s) return false;
+  if (FROM_LINE_RE.test(s)) return false;
+  if (WROTE_LINE_RE.test(s)) return false;
+  if (SEPARATOR_LINE_RE.test(s)) return false;
+  if (MARKER_LINE_RE.test(s)) return false;
   if (GREETING_RE.test(s)) return false;
   if (isStrongSignatureLine(s)) return true;
   if (/@/.test(s)) return true;
+  if (/\d/.test(s) && ADDRESS_RE.test(s) && !/[.!?。！？]$/.test(s)) return true;
   if (s.length <= 40 && !/[.!?。！？]$/.test(s)) return true;
   return false;
 }
@@ -143,61 +151,79 @@ function isNameLine(line: string): boolean {
   return words.length >= 1 && words.length <= 4 && words.every((w) => NAME_WORD_RE.test(w));
 }
 
-/** True when a strong signature line appears within the next few non-empty lines. */
-function hasStrongSignatureAhead(lines: string[], index: number): boolean {
-  let seen = 0;
-  for (let k = index + 1; k < lines.length && seen < 3; k++) {
+/** True when the immediate next non-empty line is signature-like. */
+function hasSignatureLikeAhead(lines: string[], index: number): boolean {
+  for (let k = index + 1; k < lines.length; k++) {
     const l = lines[k].trim();
     if (!l) continue;
-    seen++;
-    if (isStrongSignatureLine(l)) return true;
+    return isSignatureLike(l);
   }
   return false;
 }
 
-/**
- * Remove signature blocks from a message, bounded so that content following a
- * signature (e.g. the next quoted message that could not be split out) is kept.
- * A block starts at a sign-off line, or at a name line followed by strong
- * signature content, and consumes the following signature-like lines, stopping
- * at greetings and body sentences.
- */
-function removeSignatureBlocks(lines: string[]): string[] {
-  const result: string[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const trimmed = lines[i].trim();
-    const isStart =
-      trimmed.length > 0 &&
-      (isSignOffLine(trimmed) || (isNameLine(trimmed) && hasStrongSignatureAhead(lines, i)));
+/** A line with an unambiguous signature label / bare email / website. */
+function isLabeledSignatureLine(line: string): boolean {
+  const s = line.trim();
+  return (
+    SIGNATURE_LABEL_RE.test(s) ||
+    /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(s) ||
+    /^www\./i.test(s)
+  );
+}
 
-    if (!isStart) {
-      result.push(lines[i]);
-      i++;
+/**
+ * True when a run of at least 2 signature-like lines starts at `index`,
+ * contains a labeled line, and ends at the segment end or right before a
+ * message-start marker / greeting. Used to recognise signatures that begin
+ * directly with an address or contact line (no name / sign-off line).
+ */
+function startsLabeledSignatureRun(lines: string[], index: number): boolean {
+  let count = 0;
+  let hasLabel = false;
+  let j = index;
+  while (j < lines.length) {
+    const l = lines[j].trim();
+    if (!l) {
+      j++;
       continue;
     }
-
-    let j = i + 1;
-    let sawSignature = false;
-    while (j < lines.length) {
-      const l = lines[j].trim();
-      if (!l) {
-        j++;
-        continue;
-      }
-      if (isSignatureLike(l)) {
-        sawSignature = true;
-        j++;
-        continue;
-      }
-      break;
+    if (isSignatureLike(l)) {
+      count++;
+      if (isLabeledSignatureLine(l)) hasLabel = true;
+      j++;
+      continue;
     }
-
-    const end = sawSignature ? j : i + 1;
-    i = end;
-    while (i < lines.length && lines[i].trim() === '') i++;
+    break;
   }
-  return result;
+  if (count < 2 || !hasLabel) return false;
+
+  let k = j;
+  while (k < lines.length && lines[k].trim() === '') k++;
+  if (k >= lines.length) return true;
+  const next = lines[k].trim();
+  return (
+    FROM_LINE_RE.test(next) ||
+    WROTE_LINE_RE.test(next) ||
+    SEPARATOR_LINE_RE.test(next) ||
+    GREETING_RE.test(next)
+  );
+}
+
+/**
+ * Index of the first signature feature line in a message segment, or -1.
+ * A feature line is a sign-off phrase (including user-added feature words), a
+ * name line followed by signature content, or the start of a labeled
+ * signature run.
+ */
+function findSignatureStart(lines: string[]): number {
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l) continue;
+    if (isSignOffLine(l)) return i;
+    if (isNameLine(l) && hasSignatureLikeAhead(lines, i)) return i;
+    if (startsLabeledSignatureRun(lines, i)) return i;
+  }
+  return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,8 +311,10 @@ function cleanMessage(message: string): string {
     kept.push(line.replace(PLACEHOLDER_RE, '').trim());
   }
 
-  // Bounded signature removal (keeps content that follows a signature block).
-  let body = removeSignatureBlocks(kept);
+  // Cut from the first signature feature line to the end of the message segment
+  // (the segment is already bounded by the next From/wrote/separator or text end).
+  const sigStart = findSignatureStart(kept);
+  let body = sigStart >= 0 ? kept.slice(0, sigStart) : kept;
   // Disclaimers that reach the very end are dropped.
   body = removeTailFromIndex(body, lastDisclaimerLine(body));
 

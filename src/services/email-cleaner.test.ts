@@ -357,7 +357,7 @@ describe('cleanThreadEmails', () => {
       'Based on the option you proposed, we can work toward the USD 34,500.00 target.',
       'Please let me know if there is any room to adjust the dimensions on your end.',
       '',
-      '**Original Email:**',
+      '**Original Email**',
       '',
       'From: Juliana Correia <juliana.correia@delphiforwarding.com>',
       'Subject: RE: Quote IM 70414 | FOB Qingdao x Santos (new reference 71429)',
@@ -369,21 +369,18 @@ describe('cleanThreadEmails', () => {
       'Do you believe that we can match it?',
       '',
       'De: TLM - Angelina Liu <tlm-angelinaliu@parisigs.com>',
-      'Enviado: sexta-feira, 17 de abril de 2026 00:46',
       '',
       'Dear Larissa,',
       '',
       'Only if the length can be reduced to less than 11.5m to consider the 40fr option.',
       '',
+      'Pls note:',
+      '',
+      'OOG rate depends on occupying deadspace, which depends on different carriers, subject to EFS, and final loading approval, EFS based on slot space killed.',
+      '',
       'Excited to work on this!',
       '',
-      'Angelina Liu',
-      '',
-      'OOG/BB/RORO project cargo',
-      '',
-      'Parisi Grand Smooth Logistics Ltd.',
-      '',
-      'Add: Room 2504, A Bldg., ShenFang Plaza, Renmin South Road, Shenzhen 518001 China',
+      '2504, A Bldg., ShenFang Plaza, Renmin South Road, Shenzhen 518001 China',
       '',
       'Tel: + [86] 755 8217 6271 ext 518',
       '',
@@ -395,7 +392,9 @@ describe('cleanThreadEmails', () => {
       '',
       'NVOCC: MOC-NV03667',
       '',
-      'Office: Hong Kong - Taiwan- Shenzhen- Guangzhou- Xiamen- Ningbo- Shanghai- Qingdao',
+      'Office: Hong Kong - Taiwan - Shenzhen- Guangzhou- Xiamen- Ningbo- Shanghai- Qingdao',
+      '',
+      'From: Larissa Borsatti <larissa.borsatti@delphiforwarding.com>',
       '',
       'Dear,',
       '',
@@ -407,24 +406,48 @@ describe('cleanThreadEmails', () => {
       'Total 2 pcs 30 tons 277cbm',
     ].join('\n');
 
-    it('keeps From lines, strips other headers and the signature, preserves the earlier message', () => {
+    it('keeps From lines, strips other headers and the signature, preserves the next message', () => {
       const result = cleanThreadEmails(thread);
       expect(result).toContain('From: Juliana Correia <juliana.correia@delphiforwarding.com>');
-      expect(result).toContain('From: Juliana Correia <juliana.correia@delphiforwarding.com>');
       expect(result).toContain('De: TLM - Angelina Liu <tlm-angelinaliu@parisigs.com>');
+      expect(result).toContain('From: Larissa Borsatti <larissa.borsatti@delphiforwarding.com>');
       expect(result).not.toContain('Subject:');
-      expect(result).not.toContain('Enviado:');
-      expect(result).not.toContain('**Original Email:**');
-      expect(result).not.toContain('OOG/BB/RORO project cargo');
-      expect(result).not.toContain('Parisi Grand Smooth Logistics Ltd.');
+      expect(result).not.toContain('**Original Email**');
+      expect(result).not.toContain('2504, A Bldg.');
       expect(result).not.toContain('Tel: + [86]');
+      expect(result).not.toContain('WhatsApp/Wechat:');
       expect(result).not.toContain('NVOCC:');
       expect(result).not.toContain('www.pgs-log.com');
+      expect(result).not.toContain('Office: Hong Kong');
       expect(result).toContain('Do you believe that we can match it?');
       expect(result).toContain('Excited to work on this!');
+      expect(result).toContain('OOG rate depends on occupying deadspace');
       expect(result).toContain('If we consider the disassembled equipments');
       expect(result).toContain('Option 2 – Uncoupled unit (2 pieces):');
       expect(result).toContain('Total 2 pcs 30 tons 277cbm');
+    });
+
+    it('cuts from the signature feature line to the end of the segment (no From boundary)', () => {
+      const input = [
+        'Current email body.',
+        '',
+        'Angelina Liu',
+        'OOG/BB/RORO project cargo',
+        'Parisi Grand Smooth Logistics Ltd.',
+        'Add: Room 2504, ShenFang Plaza, Shenzhen 518001 China',
+        'Tel: + [86] 755 8217 6271',
+        '',
+        'Dear,',
+        'If we consider the disassembled equipments...',
+      ].join('\n');
+      const result = cleanThreadEmails(input);
+      expect(result).toContain('Current email body.');
+      expect(result).not.toContain('Angelina Liu');
+      expect(result).not.toContain('OOG/BB/RORO project cargo');
+      expect(result).not.toContain('Parisi Grand Smooth Logistics Ltd.');
+      expect(result).not.toContain('Tel: + [86]');
+      // Content after the signature within the same segment is removed too.
+      expect(result).not.toContain('If we consider the disassembled equipments...');
     });
   });
 });

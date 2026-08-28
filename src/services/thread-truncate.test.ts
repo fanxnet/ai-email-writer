@@ -204,4 +204,19 @@ describe('splitThreadHtmlMessages', () => {
     const parts = splitThreadHtmlMessages(nested(2), 3);
     expect(parts).toHaveLength(3);
   });
+
+  it('splits at the divRplyFwdMsg container at the tag start (not mid-tag)', () => {
+    const html = [
+      '<html><body>',
+      '<p>Current body.</p>',
+      '<div id="divRplyFwdMsg" dir="ltr"><p>De: A</p><p>Reply body.</p></div>',
+      '</body></html>',
+    ].join('');
+    const parts = splitThreadHtmlMessages(html, 3);
+    expect(parts).toHaveLength(2);
+    // The fragment must begin with the full opening tag so emailHtmlToText can strip it.
+    expect(parts[1]).toMatch(/^<div id="divRplyFwdMsg"/);
+    expect(parts[1]).not.toMatch(/^id="divRplyFwdMsg"/);
+    expect(parts[1]).toContain('Reply body.');
+  });
 });

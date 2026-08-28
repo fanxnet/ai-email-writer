@@ -56,9 +56,11 @@ function splitByBlockquoteDepth(html: string, keepReplies: number): string[] | n
 // Strategy B: generic separators / quoted containers
 // ---------------------------------------------------------------------------
 
-/** Reliable quoted-message start markers (separator lines + Outlook containers). */
+/** Reliable quoted-message start markers (separator lines + Outlook containers).
+ *  Container markers match the FULL opening tag so the split boundary lands on
+ *  the "<" — otherwise a fragment would start mid-tag and leak a broken tag. */
 const STRONG_SEPARATOR_RE =
-  /-{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|转发的消息|Odpowiedź|Odpowiedz|Oorspronkelijk bericht|Alkuperäinen viesti|Ursprungligt meddelande|Meddelande)\s*-{3,}|_{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|转发的消息)\s*_{3,}|class=["']OutlookMessageHeader["']|id=["']divRplyFwdMsg["']/gi;
+  /-{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|转发的消息|Odpowiedź|Odpowiedz|Oorspronkelijk bericht|Alkuperäinen viesti|Ursprungligt meddelande|Meddelande)\s*-{3,}|_{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|转发的消息)\s*_{3,}|<\w+\b[^>]*?\b(?:class=["']OutlookMessageHeader["']|id=["']divRplyFwdMsg["'])[^>]*>/gi;
 
 /** Horizontal rules — weaker signal, only used when no strong markers exist. */
 const HR_RE = /<hr\b[^>]*\/?>/gi;
