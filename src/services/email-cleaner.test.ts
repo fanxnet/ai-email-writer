@@ -34,7 +34,7 @@ describe('cleanThreadEmails', () => {
       expect(result).not.toContain('Sent:');
     });
 
-    it('removes a full multi-language header block (From/Sent/To/Cc/Subject/Date)', () => {
+    it('removes non-sender headers but keeps the From line', () => {
       const input = [
         'Current message body.',
         '',
@@ -48,7 +48,7 @@ describe('cleanThreadEmails', () => {
         'Original body content.',
       ].join('\n');
       const result = cleanThreadEmails(input);
-      expect(result).not.toContain('From:');
+      expect(result).toContain('From: Bob Johnson');
       expect(result).not.toContain('Sent:');
       expect(result).not.toContain('To:');
       expect(result).not.toContain('Cc:');
@@ -57,7 +57,7 @@ describe('cleanThreadEmails', () => {
       expect(result).toContain('Original body content.');
     });
 
-    it('removes Chinese header lines (发件人/抄送/发送时间/主题)', () => {
+    it('keeps the Chinese sender line but removes the other headers', () => {
       const input = [
         '请查收附件。',
         '',
@@ -71,7 +71,7 @@ describe('cleanThreadEmails', () => {
       const result = cleanThreadEmails(input);
       expect(result).toContain('请查收附件。');
       expect(result).toContain('正文内容。');
-      expect(result).not.toContain('发件人');
+      expect(result).toContain('发件人：张三');
       expect(result).not.toContain('抄送');
       expect(result).not.toContain('发送时间');
       expect(result).not.toContain('主题');
@@ -79,7 +79,7 @@ describe('cleanThreadEmails', () => {
   });
 
   describe('sender attribution', () => {
-    it('extracts the display name from a From line', () => {
+    it('keeps the full From line as attribution', () => {
       const input = [
         'Current body.',
         '',
@@ -91,11 +91,11 @@ describe('cleanThreadEmails', () => {
         'Please find attached the Q3 report.',
       ].join('\n');
       const result = cleanThreadEmails(input);
-      expect(result).toContain('Reply from Bob Johnson:');
+      expect(result).toContain('From: Bob Johnson <bob@acme.com>');
       expect(result).toContain('Please find attached the Q3 report.');
     });
 
-    it('falls back to the email address when no display name exists', () => {
+    it('keeps a From line that has only an email address', () => {
       const input = [
         'Body.',
         '',
@@ -105,10 +105,10 @@ describe('cleanThreadEmails', () => {
         'Content.',
       ].join('\n');
       const result = cleanThreadEmails(input);
-      expect(result).toContain('Reply from bob@acme.com:');
+      expect(result).toContain('From: <bob@acme.com>');
     });
 
-    it('extracts the sender from an "On ... wrote:" line', () => {
+    it('keeps an "On ... wrote:" line as attribution', () => {
       const input = [
         'Hi Alice, please review.',
         '',
@@ -117,9 +117,8 @@ describe('cleanThreadEmails', () => {
         'Here are the numbers.',
       ].join('\n');
       const result = cleanThreadEmails(input);
-      expect(result).toContain('Reply from Bob Johnson:');
+      expect(result).toContain('On Mon, Jan 15, 2024 at 3:00 PM, Bob Johnson wrote:');
       expect(result).toContain('Here are the numbers.');
-      expect(result).not.toContain('wrote:');
     });
   });
 
@@ -254,9 +253,9 @@ describe('cleanThreadEmails', () => {
     it('cleans every message and keeps the sender attribution', () => {
       const result = cleanThreadEmails(thread);
       expect(result).toContain('Hi Bob, thanks for the update.');
-      expect(result).toContain('Reply from Bob Johnson:');
+      expect(result).toContain('From: Bob Johnson <bob@acme.com>');
       expect(result).toContain('Please find attached the Q3 report.');
-      expect(result).toContain('Reply from Alice Chen:');
+      expect(result).toContain('From: Alice Chen');
       expect(result).toContain('Do you have the Q3 numbers ready?');
       expect(result).not.toContain('Cc:');
       expect(result).not.toContain('Sent:');
@@ -270,7 +269,7 @@ describe('cleanThreadEmails', () => {
     it('keeps only the newest messages when keepReplies is given', () => {
       const result = cleanThreadEmails(thread, 2);
       expect(result).toContain('Hi Bob, thanks for the update.');
-      expect(result).toContain('Reply from Bob Johnson:');
+      expect(result).toContain('From: Bob Johnson <bob@acme.com>');
       expect(result).toContain('Please find attached the Q3 report.');
       expect(result).not.toContain('Do you have the Q3 numbers ready?');
     });
@@ -299,7 +298,7 @@ describe('cleanThreadEmails', () => {
       ].join('\n');
       const result = cleanThreadEmails(input);
       expect(result).toContain('Hi Bob, please review the attached plan.');
-      expect(result).toContain('Reply from Bob Johnson:');
+      expect(result).toContain('From: Bob Johnson');
       expect(result).toContain('Thanks for sending the plan, I will review it today.');
       expect(result).not.toContain('Angelina Liu');
       expect(result).not.toContain('Best regards,');
@@ -337,7 +336,7 @@ describe('cleanThreadEmails', () => {
         'Reply body.',
       ].join('\n');
       const result = cleanThreadEmails(input);
-      expect(result).toBe('Current email body.\n\nReply from Bob:\nReply body.');
+      expect(result).toBe('Current email body.\n\nFrom: Bob\n\nReply body.');
     });
   });
 
@@ -348,6 +347,84 @@ describe('cleanThreadEmails', () => {
       expect(result).toContain('Meeting tomorrow at 10.');
       expect(result).not.toContain('Best Regards');
       expect(result).not.toContain('Alice Chen');
+    });
+  });
+
+  describe('real-world multi-message thread', () => {
+    const thread = [
+      'Yes, I believe we can match it, Juliana.',
+      '',
+      'Based on the option you proposed, we can work toward the USD 34,500.00 target.',
+      'Please let me know if there is any room to adjust the dimensions on your end.',
+      '',
+      '**Original Email:**',
+      '',
+      'From: Juliana Correia <juliana.correia@delphiforwarding.com>',
+      'Subject: RE: Quote IM 70414 | FOB Qingdao x Santos (new reference 71429)',
+      '',
+      'Dear Angelina,',
+      '',
+      'Our customer said that they have a total target USD 34.500,00 for this shipment.',
+      '',
+      'Do you believe that we can match it?',
+      '',
+      'De: TLM - Angelina Liu <tlm-angelinaliu@parisigs.com>',
+      'Enviado: sexta-feira, 17 de abril de 2026 00:46',
+      '',
+      'Dear Larissa,',
+      '',
+      'Only if the length can be reduced to less than 11.5m to consider the 40fr option.',
+      '',
+      'Excited to work on this!',
+      '',
+      'Angelina Liu',
+      '',
+      'OOG/BB/RORO project cargo',
+      '',
+      'Parisi Grand Smooth Logistics Ltd.',
+      '',
+      'Add: Room 2504, A Bldg., ShenFang Plaza, Renmin South Road, Shenzhen 518001 China',
+      '',
+      'Tel: + [86] 755 8217 6271 ext 518',
+      '',
+      'WhatsApp/Wechat: + 86 156 0296 7319',
+      '',
+      'Email: tlm-angelinaliu@parisigs.com',
+      '',
+      'Website: www.pgs-log.com',
+      '',
+      'NVOCC: MOC-NV03667',
+      '',
+      'Office: Hong Kong - Taiwan- Shenzhen- Guangzhou- Xiamen- Ningbo- Shanghai- Qingdao',
+      '',
+      'Dear,',
+      '',
+      'If we consider the disassembled equipments in the following terms, could we match it into a FLAT RACK equipment?',
+      '',
+      'Option 2 – Uncoupled unit (2 pieces):',
+      'Piece 1: 14,700 mm (L) x 3,700 mm (W) x 3,500 mm (H) – Gross weight: 20 tons',
+      'Piece 2: 14,700 mm (L) x 3,700 mm (W) x 1,600 mm (H) – Gross weight: 10 tons',
+      'Total 2 pcs 30 tons 277cbm',
+    ].join('\n');
+
+    it('keeps From lines, strips other headers and the signature, preserves the earlier message', () => {
+      const result = cleanThreadEmails(thread);
+      expect(result).toContain('From: Juliana Correia <juliana.correia@delphiforwarding.com>');
+      expect(result).toContain('From: Juliana Correia <juliana.correia@delphiforwarding.com>');
+      expect(result).toContain('De: TLM - Angelina Liu <tlm-angelinaliu@parisigs.com>');
+      expect(result).not.toContain('Subject:');
+      expect(result).not.toContain('Enviado:');
+      expect(result).not.toContain('**Original Email:**');
+      expect(result).not.toContain('OOG/BB/RORO project cargo');
+      expect(result).not.toContain('Parisi Grand Smooth Logistics Ltd.');
+      expect(result).not.toContain('Tel: + [86]');
+      expect(result).not.toContain('NVOCC:');
+      expect(result).not.toContain('www.pgs-log.com');
+      expect(result).toContain('Do you believe that we can match it?');
+      expect(result).toContain('Excited to work on this!');
+      expect(result).toContain('If we consider the disassembled equipments');
+      expect(result).toContain('Option 2 – Uncoupled unit (2 pieces):');
+      expect(result).toContain('Total 2 pcs 30 tons 277cbm');
     });
   });
 });

@@ -2,47 +2,48 @@
  * AI Compose — Email Cleaner
  *
  * Cleans a flattened conversation-thread email message-by-message so the AI
- * receives only the meaningful content. Email headers, quoted separators,
- * "wrote:" attribution lines, signatures, confidentiality disclaimers and
- * image/attachment placeholders are removed, while a compact
- * "Reply from X:" attribution keeps who-said-what visible for the model.
+ * receives only the meaningful content. Non-sender email headers, quoted
+ * separators, "Original Message:"-style markers, signatures, confidentiality
+ * disclaimers and image/attachment placeholders are removed, while the sender
+ * line ("From: ...", "De: ...", "On ..., X wrote:") is kept as each message's
+ * attribution.
  *
  * © Rizonetech (Pty) Ltd. — https://rizonesoft.com
  */
 
 // ---------------------------------------------------------------------------
-// Header label lines (multi-language)
+// Header label lines (multi-language) — everything EXCEPT the sender line.
 // ---------------------------------------------------------------------------
 
 const HEADER_LINE_RE =
-  /^(?:From|发件人|De|Von|Da|Sender|寄件人|Sent|发送时间|发送|Envoyé le|Gesendet am|Enviado el|Inviato il|Enviada em|Verzonden|Date|日期|Datum|Fecha|Data|Received|接收时间|Delivered-To|To|收件人|À|An|Para|Cc|CC|抄送|Copie|Bcc|BCC|密送|Cci|CCO|Subject|主题|Objet|Betreff|Asunto|Oggetto|Assunto|Onderwerp|Importance|优先级|Priority|X-Priority|Wichtigkeit|Importancia|Importanza|Importância|Reply-To|回复地址|Message-ID|In-Reply-To|References|MIME-Version|Content-Type|Content-Transfer-Encoding|DKIM-Signature|Authentication-Results|Return-Path|List-Unsubscribe|List-Id)\s*[：:]/i;
+  /^(?:Sent|发送时间|发送|Envoyé le|Gesendet am|Enviado|Enviado el|Enviada em|Inviato il|Verzonden|Date|日期|Datum|Fecha|Data|Received|接收时间|Delivered-To|To|收件人|À|An|Para|Cc|CC|抄送|Copie|Bcc|BCC|密送|Cci|CCO|Subject|主题|Objet|Betreff|Asunto|Assunto|Oggetto|Onderwerp|Importance|优先级|Priority|X-Priority|Wichtigkeit|Importancia|Importanza|Importância|Reply-To|回复地址|Message-ID|In-Reply-To|References|MIME-Version|Content-Type|Content-Transfer-Encoding|DKIM-Signature|Authentication-Results|Return-Path|List-Unsubscribe|List-Id)\s*[：:]/i;
+
+/** A "From: Name <email>" sender line (kept as attribution, and a message start). */
+const FROM_LINE_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]\s*(.*)$/i;
 
 // ---------------------------------------------------------------------------
-// Quoted separators / "wrote:" attribution lines
+// Quoted separators / markers / "wrote:" attribution lines
 // ---------------------------------------------------------------------------
 
 const SEPARATOR_LINE_RE =
   /^-{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|转发的消息|Odpowiedź|Odpowiedz|Oorspronkelijk bericht|Alkuperäinen viesti|Ursprungligt meddelande|Meddelande)\s*-{3,}$|^_{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|转发的消息)\s*_{3,}$|^_{3,}$/i;
 
+/** Standalone "Original Email:" / "Forwarded message:" style markers. */
+const MARKER_LINE_RE =
+  /^\*{0,2}\s*(?:original\s+(?:email|e-?mail|message)|forwarded\s+(?:message|email)|message\s+d'origine|mensaje\s+original|messaggio\s+originale|mensagem\s+original|ursprüngliche\s+nachricht|转发的?消息|原始邮件)[:：]?\s*\*{0,2}\s*$/i;
+
 const WROTE_LINE_RE =
   /^(?:On|Le|Am|El|Il|Em|在)\s+.+?(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|写道)\s*[：:]?$/i;
-
-/** Captures the sender from a "On ..., X wrote:" line. */
-const WROTE_NAME_RE =
-  /,\s*([^,]+?)\s+(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|写道)\s*[：:]?$/i;
-
-/** A "From: Name <email>" sender line. */
-const FROM_LINE_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]\s*(.*)$/i;
 
 // ---------------------------------------------------------------------------
 // Signatures
 // ---------------------------------------------------------------------------
 
 /**
- * Exact sign-off phrases (lowercased). A line is a sign-off when it starts
- * with one of these phrases, optionally followed by a comma and a name.
- * Body sentences like "Thanks for your patience." do NOT match because the
- * phrase must match exactly.
+ * Exact sign-off phrases (any case). A line is a sign-off when it starts with
+ * one of these phrases, optionally followed by a comma and a name. Body
+ * sentences like "Thanks for your patience." do NOT match because the phrase
+ * must match exactly.
  */
 const SIGN_OFF_PHRASES = new Set([
   'regards', 'angelina liu', 'best regards', 'kind regards', 'warm regards', 'warmest regards',
@@ -60,7 +61,8 @@ const SIGN_OFF_PHRASES = new Set([
   'viele grüße', 'freundliche grüße', 'beste grüße', 'liebe grüße',
   'schöne grüße', 'grüße', 'grüsse', 'hochachtungsvoll', 'danke', 'danke schön',
   'saludos', 'un saludo', 'un cordial saludo', 'atentamente', 'cordialmente',
-  'muchas gracias', 'gracias', 'reciba un cordial saludo',
+  'muchas gracias', 'gracias', 'reciba un cordial saludo', 'saludos cordiales',
+  'un abrazo', 'sin otro particular', 'un afectuoso saludo',
   'cordiali saluti', 'distinti saluti', 'un caro saluto', 'un cordiale saluto',
   'saluti', 'grazie',
   'atenciosamente', 'cordialmente', 'obrigado', 'obrigada', 'cumprimentos',
@@ -77,8 +79,17 @@ const SIGN_OFF_PHRASES_LOWER = new Set(
 /** A name word: capitalized Latin, or a short CJK run. */
 const NAME_WORD_RE = /^(?:[A-ZÀ-ÖØ-öø-ÿ][\w'.-]*|[\u4e00-\u9fff]{1,6})$/;
 
+/** Strip decorative leading chars and a trailing <email> / [bracket] tail. */
+function normalizeLine(line: string): string {
+  let s = line.trim().replace(/^[\s\-—–~·•*]+/, '');
+  s = s.replace(/\s*<[^>]*>\s*$/, '');
+  s = s.replace(/\s*\[[^\]]*\]\s*$/, '');
+  s = s.replace(/\s*mailto:.*$/i, '');
+  return s.trim();
+}
+
 function isSignOffLine(line: string): boolean {
-  const s = line.trim();
+  const s = normalizeLine(line);
   if (!s) return false;
 
   const commaIndex = s.search(/[,，]/);
@@ -92,6 +103,101 @@ function isSignOffLine(line: string): boolean {
   const words = tail.split(/\s+/).filter(Boolean);
   if (words.length === 0 || words.length > 3) return false;
   return words.every((w) => NAME_WORD_RE.test(w));
+}
+
+const GREETING_RE = /^(?:dear|hi|hello|hey|hola|bonjour|hallo|ciao|ol[aá]|greetings|sir|madam)\b/i;
+
+const SIGNATURE_LABEL_RE =
+  /^(?:add(?:ress)?:|tel(?:ephone)?:|fax:|mobile:|mob:|phone:|email:|e-?mail:|website:|web:|group:|nvocc:|office:|whatsapp:|wechat:|skype:|qq:|reg(?:istered)?:|co:|c\/o|vat:|registered:|www\.|p\.?\s*o\.?\s*box|postal)/i;
+
+const ABBREV_END_RE = /(?:ltd\.|inc\.|co\.|corp\.|s\.l\.|s\.a\.|llc|sas|sarl|pty|b\.v\.|n\.v\.|lda\.|gmbh|ag)$/i;
+
+/** A line that unambiguously belongs to a signature (label / contact / abbrev). */
+function isStrongSignatureLine(line: string): boolean {
+  const s = line.trim();
+  if (!s) return false;
+  if (SIGNATURE_LABEL_RE.test(s)) return true;
+  if (/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(s)) return true;
+  if (/www\.|https?:\/\//i.test(s)) return true;
+  if (/\+?\d[\d\s().\-]{7,}/.test(s)) return true;
+  if (s.length <= 40 && ABBREV_END_RE.test(s)) return true;
+  return false;
+}
+
+/** A line that looks like signature content (strong, or a short non-sentence line). */
+function isSignatureLike(line: string): boolean {
+  const s = line.trim();
+  if (!s) return false;
+  if (GREETING_RE.test(s)) return false;
+  if (isStrongSignatureLine(s)) return true;
+  if (/@/.test(s)) return true;
+  if (s.length <= 40 && !/[.!?。！？]$/.test(s)) return true;
+  return false;
+}
+
+function isNameLine(line: string): boolean {
+  const s = normalizeLine(line);
+  if (!s || s.length > 40) return false;
+  if (/[.!?。！？]/.test(s)) return false;
+  const words = s.split(/\s+/);
+  return words.length >= 1 && words.length <= 4 && words.every((w) => NAME_WORD_RE.test(w));
+}
+
+/** True when a strong signature line appears within the next few non-empty lines. */
+function hasStrongSignatureAhead(lines: string[], index: number): boolean {
+  let seen = 0;
+  for (let k = index + 1; k < lines.length && seen < 3; k++) {
+    const l = lines[k].trim();
+    if (!l) continue;
+    seen++;
+    if (isStrongSignatureLine(l)) return true;
+  }
+  return false;
+}
+
+/**
+ * Remove signature blocks from a message, bounded so that content following a
+ * signature (e.g. the next quoted message that could not be split out) is kept.
+ * A block starts at a sign-off line, or at a name line followed by strong
+ * signature content, and consumes the following signature-like lines, stopping
+ * at greetings and body sentences.
+ */
+function removeSignatureBlocks(lines: string[]): string[] {
+  const result: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+    const isStart =
+      trimmed.length > 0 &&
+      (isSignOffLine(trimmed) || (isNameLine(trimmed) && hasStrongSignatureAhead(lines, i)));
+
+    if (!isStart) {
+      result.push(lines[i]);
+      i++;
+      continue;
+    }
+
+    let j = i + 1;
+    let sawSignature = false;
+    while (j < lines.length) {
+      const l = lines[j].trim();
+      if (!l) {
+        j++;
+        continue;
+      }
+      if (isSignatureLike(l)) {
+        sawSignature = true;
+        j++;
+        continue;
+      }
+      break;
+    }
+
+    const end = sawSignature ? j : i + 1;
+    i = end;
+    while (i < lines.length && lines[i].trim() === '') i++;
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,38 +250,6 @@ function splitMessages(text: string): string[] {
 // Per-message cleaning
 // ---------------------------------------------------------------------------
 
-function cleanSenderName(raw: string): string {
-  let s = raw.trim();
-  const lt = s.indexOf('<');
-  if (lt > 0) {
-    const name = s.slice(0, lt).replace(/^mailto:/i, '').trim();
-    if (name) return name;
-  }
-  const email = s.match(/[\w.+-]+@[\w.-]+/);
-  if (email) return email[0];
-  return s.replace(/^mailto:/i, '').trim();
-}
-
-function extractSenderName(lines: string[]): string | null {
-  for (let i = 0; i < Math.min(lines.length, 8); i++) {
-    const line = lines[i];
-    const from = line.match(FROM_LINE_RE);
-    if (from) return cleanSenderName(from[1]);
-    const wrote = line.match(WROTE_NAME_RE);
-    if (wrote && wrote[1].trim()) return wrote[1].trim();
-  }
-  return null;
-}
-
-/** Index of the last sign-off line, or -1. */
-function lastSignOffLine(lines: string[]): number {
-  let last = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (isSignOffLine(lines[i].trim())) last = i;
-  }
-  return last;
-}
-
 /** Index of the last disclaimer-start line within the final 6 lines, or -1. */
 function lastDisclaimerLine(lines: string[]): number {
   const nonEmpty = lines.map((l, i) => ({ line: l.trim(), index: i })).filter((x) => x.line.length > 0);
@@ -193,10 +267,9 @@ function removeTailFromIndex(lines: string[], index: number): string[] {
   return lines.slice(0, index);
 }
 
-/** Clean a single message: headers, separators, signature, disclaimer, placeholders. */
+/** Clean a single message: headers, separators, markers, signature, disclaimer, placeholders. */
 function cleanMessage(message: string): string {
   const lines = message.split('\n');
-  const sender = extractSenderName(lines);
 
   const kept: string[] = [];
   for (const rawLine of lines) {
@@ -207,19 +280,17 @@ function cleanMessage(message: string): string {
     }
     if (HEADER_LINE_RE.test(line)) continue;
     if (SEPARATOR_LINE_RE.test(line)) continue;
-    if (WROTE_LINE_RE.test(line)) continue;
+    if (MARKER_LINE_RE.test(line)) continue;
     if (ATTACHMENT_LINE_RE.test(line)) continue;
     kept.push(line.replace(PLACEHOLDER_RE, '').trim());
   }
 
-  // Signatures and disclaimers both run to the end of the message.
-  let body = removeTailFromIndex(kept, lastSignOffLine(kept));
+  // Bounded signature removal (keeps content that follows a signature block).
+  let body = removeSignatureBlocks(kept);
+  // Disclaimers that reach the very end are dropped.
   body = removeTailFromIndex(body, lastDisclaimerLine(body));
 
-  const text = body.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  if (!text) return '';
-
-  return sender ? `Reply from ${sender}:\n${text}` : text;
+  return body.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +302,10 @@ function cleanMessage(message: string): string {
  *
  * - `keepReplies` (optional): keep only the newest `keepReplies` messages
  *   (the current email plus the newest N-1 replies). Omit to clean all.
- * - Headers (Cc/抄送, Sent/发送时间, From/To/Subject/Date, ...), quoted
- *   separators, "wrote:" lines, signatures, confidentiality disclaimers and
+ * - Non-sender headers (Cc/抄送, Sent/发送时间/Enviado, Subject, To, Date, ...),
+ *   quoted separators and markers, signatures, confidentiality disclaimers and
  *   image/attachment placeholders are removed from every message.
- * - Each message with a known sender is prefixed with "Reply from X:".
+ * - The sender line ("From: ...", "De: ...", "On ..., X wrote:") is kept.
  */
 export function cleanThreadEmails(text: string, keepReplies?: number): string {
   if (!text) return text;

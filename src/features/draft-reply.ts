@@ -123,9 +123,9 @@ export function clearEmailContext(): void {
  * Build the email body text for a reply prompt: split the raw thread HTML into
  * its newest `keepReplies` messages structurally (blockquote depth /
  * separators / Outlook containers), then flatten and clean EACH message
- * independently (headers, signatures, disclaimers, placeholders) while keeping
- * a compact "Reply from X:" attribution. Paragraphs are separated by a single
- * blank line.
+ * independently (non-sender headers, signatures, disclaimers, placeholders),
+ * keeping the sender line as each message's attribution. Paragraphs are
+ * separated by a single blank line.
  * Used by both the reply and suggest-replies flows.
  */
 export function buildThreadBodyText(bodyHtml: string, keepReplies: number): string {

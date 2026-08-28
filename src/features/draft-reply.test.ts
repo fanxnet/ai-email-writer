@@ -268,7 +268,7 @@ describe('generateReply quoted content filtering', () => {
     const prompt = mockGenerateText.mock.calls[0][0] as string;
     expect(prompt).toContain('Please review the attached document.');
     expect(prompt).toContain('Original content here.');
-    expect(prompt).toContain('Reply from Alice Smith:');
+    expect(prompt).toContain('From: Alice Smith');
     expect(prompt).not.toContain('Sent:');
     expect(prompt).not.toContain('Subject: Re: Q3 figures');
   });
@@ -292,7 +292,7 @@ describe('generateReply quoted content filtering', () => {
     const prompt = mockGenerateText.mock.calls[0][0] as string;
     expect(prompt).toContain('请查收附件。');
     expect(prompt).toContain('原始内容。');
-    expect(prompt).toContain('Reply from 张三:');
+    expect(prompt).toContain('发件人：张三');
     expect(prompt).not.toContain('发送时间');
     expect(prompt).not.toContain('主题');
   });
