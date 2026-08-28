@@ -18,15 +18,7 @@ import { buildPrompt, truncateContext } from '../prompts/builder';
 import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
-import {
-  getCurrentEmailBodyHtml,
-  getCurrentEmailSubject,
-  getOriginalSender,
-  getItemMode,
-  emailHtmlToText,
-  EmailContact,
-} from '../services/outlook';
-import { splitThreadHtmlMessages } from '../services/thread-truncate';
+import { emailHtmlToText, getCurrentEmailBodyHtml, getCurrentEmailSubject, getOriginalSender, getItemMode, EmailContact } from '../services/outlook';
 import { cleanThreadEmails } from '../services/email-cleaner';
 import { getSessionKey } from './auto-save';
 import {
@@ -120,22 +112,16 @@ export function clearEmailContext(): void {
 }
 
 /**
- * Build the email body text for a reply prompt: split the raw thread HTML into
- * its newest `keepReplies` messages structurally (blockquote depth /
- * separators / Outlook containers / text "From:" markers), then flatten and
- * clean EACH message independently (non-sender headers, signatures,
- * disclaimers, placeholders), keeping the sender line as each message's
- * attribution. Paragraphs are separated by a single blank line.
+ * Build the email body text for a reply prompt: flatten the thread HTML to
+ * text (keeping quoted containers so the full thread survives), split it into
+ * messages by the "From:"/"De:"/wrote: sender features, keep the newest
+ * `keepReplies` messages, then clean each (non-sender headers incl. multi-line
+ * recipient lists, signatures, disclaimers, placeholders), keeping the sender
+ * line as attribution.
  * Used by both the reply and suggest-replies flows.
  */
 export function buildThreadBodyText(bodyHtml: string, keepReplies: number): string {
-  const fragments = splitThreadHtmlMessages(bodyHtml, keepReplies);
-  return fragments
-    .map((fragment) => cleanThreadEmails(emailHtmlToText(fragment)))
-    .filter((part) => part.length > 0)
-    .join('\n\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return cleanThreadEmails(emailHtmlToText(bodyHtml, { stripQuoted: false }), keepReplies);
 }
 
 /**

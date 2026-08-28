@@ -12,11 +12,17 @@
  */
 
 // ---------------------------------------------------------------------------
-// Header label lines (multi-language) — everything EXCEPT the sender line.
+// Header labels (multi-language). A header block = a label line (with or
+// without a same-line value) plus the following value lines (which may be a
+// multi-line recipient list). Only the FIRST sender block is kept.
 // ---------------------------------------------------------------------------
 
-const HEADER_LINE_RE =
-  /^(?:Sent|发送时间|发送|Envoyé le|Gesendet am|Enviado|Enviado el|Enviada em|Inviato il|Verzonden|Date|日期|Datum|Fecha|Data|Received|接收时间|Delivered-To|To|收件人|À|An|Para|Cc|CC|抄送|Copie|Bcc|BCC|密送|Cci|CCO|Subject|主题|Objet|Betreff|Asunto|Assunto|Oggetto|Onderwerp|Importance|优先级|Priority|X-Priority|Wichtigkeit|Importancia|Importanza|Importância|Reply-To|回复地址|Message-ID|In-Reply-To|References|MIME-Version|Content-Type|Content-Transfer-Encoding|DKIM-Signature|Authentication-Results|Return-Path|List-Unsubscribe|List-Id)\s*[：:]/i;
+/** Any header label line (sender or other). */
+const HEADER_LABEL_RE =
+  /^(?:From|发件人|De|Von|Da|Sender|寄件人|Sent|发送时间|发送|Envoyé le|Gesendet am|Enviado|Enviado el|Enviada em|Inviato il|Verzonden|Date|日期|Datum|Fecha|Data|Received|接收时间|Delivered-To|To|收件人|À|An|Para|Cc|CC|抄送|Copie|Bcc|BCC|密送|Cci|CCO|Subject|主题|Objet|Betreff|Asunto|Assunto|Oggetto|Onderwerp|Importance|优先级|Priority|X-Priority|Wichtigkeit|Importancia|Importanza|Importância|Reply-To|回复地址|Message-ID|In-Reply-To|References|MIME-Version|Content-Type|Content-Transfer-Encoding|DKIM-Signature|Authentication-Results|Return-Path|List-Unsubscribe|List-Id)\s*[：:]/i;
+
+/** Sender label (kept as attribution). */
+const SENDER_LABEL_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]/i;
 
 /** A "From: Name <email>" sender line (kept as attribution, and a message start). */
 const FROM_LINE_RE = /^(?:From|发件人|De|Von|Da|Sender|寄件人)\s*[：:]\s*(.*)$/i;
@@ -293,26 +299,82 @@ function removeTailFromIndex(lines: string[], index: number): string[] {
   return lines.slice(0, index);
 }
 
+/** True when a line reads as body content (greeting, sentence, or long text). */
+function isBodyLikeLine(line: string): boolean {
+  const s = line.trim();
+  if (!s) return false;
+  if (GREETING_RE.test(s)) return true;
+  if (/[.!?。！？]$/.test(s)) return true;
+  return s.length > 60;
+}
+
+/**
+ * Collect a header block starting at `start` (a header-label line). The block
+ * spans the label plus the following value lines (which may be a multi-line
+ * recipient list). Stops at a blank line, the next header label, or body-like
+ * content so it never swallows the message body. Returns the block merged into
+ * one line and the index just past the block.
+ */
+function collectHeaderBlock(lines: string[], start: number): { merged: string; next: number } {
+  const valueLines: string[] = [];
+  let i = start + 1;
+  while (i < lines.length) {
+    const l = lines[i].trim();
+    if (!l) break;
+    if (HEADER_LABEL_RE.test(l)) break;
+    if (isBodyLikeLine(l)) break;
+    valueLines.push(l);
+    i++;
+  }
+  const labelLine = lines[start].trim();
+  const merged = valueLines.length ? `${labelLine} ${valueLines.join(' ')}` : labelLine;
+  return { merged, next: i };
+}
+
 /** Clean a single message: headers, separators, markers, signature, disclaimer, placeholders. */
 export function cleanEmailMessage(message: string): string {
   const lines = message.split('\n');
 
   const kept: string[] = [];
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
+  let i = 0;
+  let sawSender = false;
+  while (i < lines.length) {
+    const line = lines[i].trim();
     if (!line) {
       kept.push('');
+      i++;
       continue;
     }
-    if (HEADER_LINE_RE.test(line)) continue;
-    if (SEPARATOR_LINE_RE.test(line)) continue;
-    if (MARKER_LINE_RE.test(line)) continue;
-    if (ATTACHMENT_LINE_RE.test(line)) continue;
+    if (SEPARATOR_LINE_RE.test(line)) {
+      i++;
+      continue;
+    }
+    if (MARKER_LINE_RE.test(line)) {
+      i++;
+      continue;
+    }
+    if (ATTACHMENT_LINE_RE.test(line)) {
+      i++;
+      continue;
+    }
+    // Header block (label may sit alone on the line, value(s) follow).
+    if (HEADER_LABEL_RE.test(line)) {
+      const { merged, next } = collectHeaderBlock(lines, i);
+      // Keep only the FIRST sender block; strip everything else (incl. the
+      // multi-line recipient lists of other header blocks).
+      if (SENDER_LABEL_RE.test(line) && !sawSender) {
+        kept.push(merged.replace(PLACEHOLDER_RE, '').trim());
+        sawSender = true;
+      }
+      i = next;
+      continue;
+    }
+    // Body content.
     kept.push(line.replace(PLACEHOLDER_RE, '').trim());
+    i++;
   }
 
-  // Cut from the first signature feature line to the end of the message segment
-  // (the segment is already bounded by the next From/wrote/separator or text end).
+  // Cut from the first signature feature line to the end of the message segment.
   const sigStart = findSignatureStart(kept);
   let body = sigStart >= 0 ? kept.slice(0, sigStart) : kept;
   // Disclaimers that reach the very end are dropped.

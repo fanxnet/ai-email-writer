@@ -321,14 +321,15 @@ describe('generateReply quoted content filtering', () => {
     expect(prompt).not.toContain('主题');
   });
 
-  it('truncates a long blockquote thread to the newest messages before building the prompt', async () => {
+  it('keeps the newest messages (thread off) using From/wrote markers', async () => {
     const threadHtml = [
       '<html><body>',
       '<p>Current email body.</p>',
-      '<blockquote><p>Reply 1 body.</p>',
-      '<blockquote><p>Reply 2 body.</p>',
-      '<blockquote><p>Reply 3 body.</p>',
-      '<blockquote><p>Reply 4 body (oldest).</p>',
+      '<blockquote><p>On Mon, Bob wrote:</p><p>Reply 1 body.</p>',
+      '<blockquote><p>On Sun, Alice wrote:</p><p>Reply 2 body.</p>',
+      '<blockquote><p>On Sat, Bob wrote:</p><p>Reply 3 body.</p>',
+      '<blockquote><p>On Fri, Alice wrote:</p><p>Reply 4 body (oldest).</p>',
+      '</blockquote></blockquote></blockquote></blockquote>',
       '</blockquote></blockquote></blockquote></blockquote>',
       '</body></html>',
     ].join('');
