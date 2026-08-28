@@ -27,6 +27,7 @@ import {
   EmailContact,
 } from '../services/outlook';
 import { truncateHtmlThread } from '../services/thread-truncate';
+import { cleanThreadEmails } from '../services/email-cleaner';
 import { getSessionKey } from './auto-save';
 import {
   appendTurn,
@@ -63,11 +64,11 @@ export interface EmailContext {
 /** Max tokens of original email to include in the reply prompt. */
 const MAX_CONTENT_TOKENS = 6000;
 
-/**
- * How many most-recent messages to keep when the thread is truncated before
- * building the reply prompt (the current email plus the newest N-1 replies).
- */
-const KEEP_REPLIES = 3;
+/** Thread off: keep the current email plus the newest 2 replies. */
+export const MIN_KEEP_REPLIES = 3;
+
+/** Thread on: keep a longer original-email reply context. */
+export const MAX_KEEP_REPLIES = 9;
 
 // ---------------------------------------------------------------------------
 // State
@@ -119,84 +120,17 @@ export function clearEmailContext(): void {
 }
 
 /**
- * Regex markers that indicate the start of quoted/replied history content.
- * Patterns do NOT consume trailing content — matching position is used to cut.
- * Header labels are localized for EN/ZH plus common European languages
- * (FR/DE/ES/IT/PT); a generic label:value block marker covers other languages.
+ * Build the email body text for a reply prompt: structurally truncate the
+ * raw thread HTML to the newest `keepReplies` messages, flatten to text, then
+ * clean each message (headers, signatures, disclaimers, placeholders) while
+ * keeping a compact "Reply from X:" attribution.
+ * Used by both the reply and suggest-replies flows.
  */
-const QUOTE_MARKERS: RegExp[] = [
-  // "wrote:" equivalents (Gmail / Apple Mail / localized clients)
-  // EN: "On Mon, Jan 15, 2024 at 3:00 PM, Alice wrote:"
-  // FR: "Le 15 janvier 2024 à 15:00, Alice a écrit :"
-  // DE: "Am Montag, 15. Januar 2024 um 15:00 schrieb Alice:"
-  /(?:On|Le|Am|El|Il|Em|在)\s+.{10,}?\s*(?:wrote|a écrit|schrieb|escribió|ha scritto|escreveu|写道)\s*[：:]/gi,
-  // Multi-line From/Sent/To/Subject header block (localized labels)
-  /^(?:From|发件人|De|Von|Da)\s*[：:][^\n]*\n(?:(?:To|收件人|À|An|Para|A|CC|Cc|抄送|Sent|发送时间|Envoyé le|Gesendet am|Enviado el|Inviato il|Enviada em|Date|日期|Datum|Fecha|Data|Importance|Wichtigkeit|Importancia|Importanza|Importância|Created|创建时间|Reply-To)\s*[：:][^\n]*\n)*(?:Subject|主题|Objet|Betreff|Asunto|Oggetto|Assunto)\s*[：:][^\n]*\n/gim,
-  // Generic language-neutral fallback: 3+ consecutive "Label: value" lines
-  // (same-line value, short lines) — catches languages not in the alias table.
-  /^(?:[^\s:：]{1,30}[：:][ \t]+[^\n]{1,200}\n){3,}/gm,
-  // Single-line compact format
-  /^From:.*(?:Sent|发送时间):.*(?:To|收件人):.*(?:Subject|主题):.*$/gim,
-  // Quoted-message separators (localized)
-  /^-{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|Forwarded message|Message transféré|Weitergeleitete Nachricht|Mensaje reenviado|Messaggio inoltrato|Mensagem encaminhada|转发的消息)\s*-{3,}/gi,
-  /_{3,}\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件|Forwarded message|Message transféré|Weitergeleitete Nachricht|Mensaje reenviado|Messaggio inoltrato|Mensagem encaminhada|转发的消息)\s*_{3,}/gi,
-  /-----+\s*(?:Original Message|Message d'origine|Ursprüngliche Nachricht|Mensaje original|Messaggio originale|Mensagem original|原始邮件)\s*-----+/gi,
-];
-
-/**
- * Find the index where quoted/history content starts.
- * Returns -1 when no quoted content is found, or when the only marker sits at
- * the very top of the body (e.g. a forwarded email that begins with a
- * "From:...Sent:...To:...Subject:..." block). Such a body is the message's own
- * content, so it is preserved rather than stripped.
- */
-function findQuotedStart(text: string): number {
-  let earliest = -1;
-  for (const re of QUOTE_MARKERS) {
-    re.lastIndex = 0;
-    const m = re.exec(text);
-    if (m && text.slice(0, m.index).trim().length > 0) {
-      if (earliest === -1 || m.index < earliest) {
-        earliest = m.index;
-      }
-    }
-  }
-  return earliest;
-}
-
-/**
- * Filter quoted/replied content from email body text.
- * Handles Classic Outlook, Outlook Web, and Gmail quoted-content formats.
- * Exposed for unit testing.
- */
-export function filterQuotedContent(text: string): string {
-  let result = text;
-
-  // 1) Remove standalone separator lines (underscores/dashes) — Classic Outlook
-  result = result.replace(/^[_-]{3,}\s*$/gm, '\n');
-
-  // 2) Merge header-label-only lines with the following value line
-  //    "From:\nAlice" → "From: Alice" (language-neutral)
-  result = result.replace(
-    /^([^\s:：]{1,30})[：:]\s*\n(?=\S)/gim,
-    '$1: '
+export function buildThreadBodyText(bodyHtml: string, keepReplies: number): string {
+  return cleanThreadEmails(
+    emailHtmlToText(truncateHtmlThread(bodyHtml, keepReplies)),
+    keepReplies,
   );
-
-  // 3) Cut everything from the first quoted-content marker onward, but ONLY
-  //    when the marker is preceded by real content (reply-email pattern).
-  //    Markers at the very top (e.g. forwarded email) are preserved.
-  const quoteStart = findQuotedStart(result);
-  if (quoteStart > 0) {
-    result = result.slice(0, quoteStart);
-  }
-
-  // 4) Remove "> " prefixed quoted lines (line-by-line, safe)
-  result = result.replace(/^>.*$/gm, '');
-
-  // 5) Clean up excessive blank lines
-  result = result.replace(/\n{3,}/g, '\n\n');
-
-  return result.trim();
 }
 
 /**
@@ -218,20 +152,11 @@ export async function generateReply(
   originalEmail += `Subject: ${context.subject}\n\n`;
 
   // Resolve the body to include based on the Thread toggle:
-  // - Thread off (default): truncate the raw HTML to the newest KEEP_REPLIES
-  //   messages first (structural, client-agnostic), then convert to text and
-  //   run the text-level quoted-content filter as a secondary guard.
-  // - Thread on: keep the full conversation, preserving quoted containers.
-  let emailBody: string;
-  if (options.includeThread) {
-  // include Thread completely
-  //     emailBody = emailHtmlToText(context.bodyHtml ?? '', { stripQuoted: false });
-    const truncatedHtml = truncateHtmlThread(context.bodyHtml ?? '', 9);
-    emailBody = filterQuotedContent(emailHtmlToText(truncatedHtml));
-  } else {
-    const truncatedHtml = truncateHtmlThread(context.bodyHtml ?? '', KEEP_REPLIES);
-    emailBody = filterQuotedContent(emailHtmlToText(truncatedHtml));
-  }
+  // - Thread off (default): keep the current email plus the newest 2 replies.
+  // - Thread on: keep a longer reply context (up to MAX_KEEP_REPLIES messages).
+  // Both are truncated on the HTML structure, then cleaned message-by-message.
+  const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
+  const emailBody = buildThreadBodyText(context.bodyHtml ?? '', KEEP_REPLIES);
 
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
