@@ -68,7 +68,10 @@ const SIGNATURE_TRIGGERS = [
     'Angelina Liu'
 ];
 
-const starterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
+// 孤立starter：一行只有 From:/De:
+const lonelyStarterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})\\s*$`, 'i');
+// 单行完整分割头：预处理合并成功，同一行同时有标记+邮箱
+const inlineStarterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
 type MailBlock = {
@@ -76,11 +79,12 @@ type MailBlock = {
     text: string;
 };
 
-/**
- * 判断一行是否为邮件分割起点（预处理合并完成后，From:/De: 与邮箱在同一行）
- */
-function isMailBlockStartLine(line: string): boolean {
-    return starterRx.test(line) && line.includes('<');
+function isLonelyStarterLine(line: string): boolean {
+    return lonelyStarterRx.test(line);
+}
+
+function isInlineMailStartLine(line: string): boolean {
+    return inlineStarterRx.test(line) && line.includes('<');
 }
 
 function isExtraHeaderLine(line: string): boolean {
@@ -119,20 +123,64 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     const blocks: string[][] = [];
     let preBuffer: string[] = [];
     let currentBlock: string[] | null = null;
+    let pendingStarterRaw: string | null = null;
 
     for (const item of rawLines) {
         const textLine = item.line;
-        if (isMailBlockStartLine(textLine)) {
+
+        // ---------- 情况A：上一行缓存了孤立starter ----------
+        if (pendingStarterRaw !== null) {
+            if (textLine.includes('<')) {
+                if (currentBlock !== null && currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                }
+                currentBlock = [];
+                currentBlock.push(pendingStarterRaw);
+                currentBlock.push(item.raw);
+                pendingStarterRaw = null;
+            } else {
+                // 下一行无邮箱，不是引用头，恢复成普通文本
+                if (currentBlock === null) {
+                    preBuffer.push(pendingStarterRaw);
+                    preBuffer.push(item.raw);
+                } else {
+                    currentBlock.push(pendingStarterRaw);
+                    currentBlock.push(item.raw);
+                }
+                pendingStarterRaw = null;
+            }
+            continue;
+        }
+
+        // ---------- 情况B：本行就是完整单行分割头(预处理成功) ----------
+        if (isInlineMailStartLine(textLine)) {
             if (currentBlock !== null && currentBlock.length > 0) {
                 blocks.push(currentBlock);
             }
             currentBlock = [item.raw];
             continue;
         }
+
+        // ---------- 情况C：命中孤立 From:/De:，先缓存，看下一行 ----------
+        if (isLonelyStarterLine(textLine)) {
+            pendingStarterRaw = item.raw;
+            continue;
+        }
+
+        // ---------- 普通文本行 ----------
         if (currentBlock === null) {
             preBuffer.push(item.raw);
         } else {
             currentBlock.push(item.raw);
+        }
+    }
+
+    // 循环结束，残留未匹配的孤立starter，当做普通正文
+    if (pendingStarterRaw !== null) {
+        if (currentBlock === null) {
+            preBuffer.push(pendingStarterRaw);
+        } else {
+            currentBlock.push(pendingStarterRaw);
         }
     }
 
@@ -186,7 +234,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         for (const item of rawLines) {
             if (signatureHit) continue;
             const line = item.line;
-            if (isMailBlockStartLine(line)) {
+            if(isInlineMailStartLine(line) || isLonelyStarterLine(line)){
                 outLines.push(item.raw);
                 continue;
             }
