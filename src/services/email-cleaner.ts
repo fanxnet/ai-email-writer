@@ -5,57 +5,138 @@ function escapeRegExp(str: string): string {
 // ===== 常量定义 =====
 /**
  * 多语种：邮件回复块起始标记（From类头部）
+ * 覆盖：英 / 中 / 德 / 法 / 西 / 葡 / 意 / 俄 / 日 / 韩
  */
 const THREAD_BLOCK_STARTERS = [
     'From:',
-    'Von:',
-    'De:',
-    '发件人：',
-    'Sender:',
-    'Expéditeur :',
-    'Remitente:'
+    'Von:',          // 德语
+    'De:',           // 法语、西班牙语
+    '发件人：',      // 中文 Outlook
+    'Sender:',       // 英文备选
+    'Expéditeur :',  // 法语
+    'Remitente:',    // 西班牙语
+    'Remetente:',    // 葡萄牙语
+    'Mittente:',     // 意大利语
+    'От:',           // 俄语
+    '差出人：',      // 日语
+    '보낸 사람:'     // 韩语
 ];
 /**
  * 需要删除的邮件头前缀列表（多语种）
+ * Subject / To / Cc / Date / Sent 各国语言头部
  */
 const HEADER_REMOVE_LIST = [
+    // 英文
     'Subject:',
-    'Betreff:',
-    'Objet :',
-    '主题：',
     'To:',
-    'An:',
-    'À :',
-    '收件人：',
     'Cc:',
-    'Kopie:',
-    'Cc :',
-    '抄送：',
     'Sent:',
-    'Gesendet:',
-    'Envoyé :',
-    '发送时间：',
     'Date:',
+    // 德语
+    'Betreff:',
+    'An:',
+    'Kopie:',
+    'Gesendet:',
     'Datum:',
+    // 法语
+    'Objet :',
+    'À :',
+    'Cc :',
+    'Envoyé :',
     'Date :',
+    // 西班牙语
+    'Asunto:',
+    'Para:',
+    'Copia:',
+    'Enviado:',
+    'Fecha:',
+    // 葡萄牙语
+    'Assunto:',
+    'Para:',
+    'Cópia:',
+    'Enviado:',
+    'Data:',
+    // 意大利语
+    'Oggetto:',
+    'A:',
+    'Cc:',
+    'Inviato:',
+    'Data:',
+    // 俄语
+    'Тема:',
+    'Кому:',
+    'Копия:',
+    'Отправлено:',
+    'Дата:',
+    // 日语
+    '件名：',
+    '宛先：',
+    'Cc：',
+    '送信日時：',
+    '日付：',
+    // 韩语
+    '제목:',
+    '받는 사람:',
+    '참조:',
+    '보낸 시간:',
+    '날짜:',
+    // 中文
+    '主题：',
+    '收件人：',
+    '抄送：',
+    '发送时间：',
     '日期：'
 ];
 /**
  * 多语种签名截断关键词，命中后删除该行至本邮件块末尾
  */
 const SIGNATURE_TRIGGERS = [
+    // English
     'Regards,',
     'Best regards,',
+    'Kind regards,',
     'Thanks,',
     'Thank you,',
+    'Thank you very much,',
     'Sincerely,',
+    'Best,',
+    'Cheers,',
+    // 德语
     'Mit freundlichen Grüßen',
+    'Viele Grüße',
+    'Liebe Grüße',
+    // 法语
     'Cordialement,',
+    'Bien à vous,',
+    'Merci,',
+    // 西班牙语
+    'Saludos,',
+    'Atentamente,',
+    'Muchas gracias,',
+    // 葡萄牙语
+    'Atenciosamente,',
+    'Saudações,',
+    'Obrigado,',
+    // 意大利语
+    'Cordiali saluti,',
+    'Grazie,',
+    // 俄语
+    'С уважением,',
+    'Спасибо,',
+    // 日语
+    'よろしくお願いいたします。',
+    '宜しくお願い致します。',
+    // 韩语
+    '감사합니다.',
+    // 中文
     '顺颂商祺',
     '祝好',
     '此致',
     '敬礼',
-    'Angelina Liu',  // 自定义
+    '祝工作顺利',
+    '祝万事如意',
+    // 自定义
+    'Angelina Liu'
 ];
 // 构建正则（此时 escapeRegExp 已定义）
 const blockStartRegex = new RegExp(`^\\s*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
@@ -157,6 +238,7 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     const blocks = splitMailBlocks(bodytext);
     const cleanedBlocks: string[] = [];
+
     for (const block of blocks) {
         const rawLines = splitPreserveNewline(block);
         const outLines: string[] = [];
