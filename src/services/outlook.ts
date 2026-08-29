@@ -85,75 +85,73 @@ export function getItemMode(): ItemMode {
  * @param html - HTML string of the email body
  * @param options.stripQuoted - Whether to remove quoted/replied content (default: false)
  */
+  /** 是否移除历史引用块，false = 全部保留历史邮件正文 */
+
 export function emailHtmlToText(
   html: string,
-  options: { stripQuoted?: boolean } = {},
+  options: EmailHtmlToTextOptions = {},
 ): string {
-  let text = html;
+  const { stripQuoted = false } = options;
 
-  // 1. 移除引用块（默认保留，以显示完整线程）
-  if (options.stripQuoted === true) {
-    text = text
-      .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, '')
-      .replace(/<div\s+class="gmail_quote"[\s\S]*?<\/div>/gi, '')
-      .replace(/<div\s+id="gmail_quote"[\s\S]*?<\/div>/gi, '')
-      .replace(/<div\s+class="yahoo_quoted"[\s\S]*?<\/div>/gi, '');
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // 递归删除HTML注释
+  const removeComments = (root: Node) => {
+    const nodes = Array.from(root.childNodes);
+    for (const node of nodes) {
+      if (node.nodeType === Node.COMMENT_NODE) {
+        node.remove();
+      } else if (node.hasChildNodes()) {
+        removeComments(node);
+      }
+    }
+  };
+  removeComments(doc.body);
+
+  // 移除脚本、样式，不属于邮件正文
+  doc.querySelectorAll('style,script,noscript').forEach(el => el.remove());
+
+  // 仅开启stripQuoted时才删除引用；默认所有历史邮件完整保留
+  if (stripQuoted) {
+    const quoteSelectors = [
+      'blockquote',
+      'div.gmail_quote',
+      'div[id="gmail_quote"]',
+      'div.yahoo_quoted',
+      '.mail_quote',
+      '.outlookQuote',
+      '.replyQuote',
+      'div.quote'
+    ];
+    quoteSelectors.forEach(sel => {
+      doc.querySelectorAll(sel).forEach(el => el.remove());
+    });
   }
 
-  // 2. 移除样式/脚本
+  // 列表项添加项目符号
+  doc.querySelectorAll('li').forEach(li => {
+    if (!li.textContent?.startsWith('• ')) {
+      const textNode = doc.createTextNode('• ');
+      li.insertBefore(textNode, li.firstChild);
+    }
+  });
+
+  // innerText还原布局换行，表格、复杂邮件布局不会丢内容
+  let text = doc.body.innerText;
+
+  // 强制清理Emoji表情包（永久生效）
+  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}]/gu;
+  text = text.replace(emojiRegex, '');
+
+  // 清除Outlook零宽隐形字符，解决换行错乱
+  const zeroWidthChars = /[\u2000-\u200F\u2028-\u202F]/g;
+  text = text.replace(zeroWidthChars, ' ');
+
+  // 规整多余空格和空行
   text = text
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-
-  // 3. 超链接保留文本
-  text = text.replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1');
-
-  // 4. 块级元素转为换行（增加表格、列表等）
-  text = text
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<hr\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr|h[1-6]|td|th|ul|ol)>/gi, '\n')  // 新增 td, th, ul, ol
-    // 在列表项前也加换行（避免粘连）
-    .replace(/<li[^>]*>/gi, '\n• ')   // 可选，添加项目符号
-    .replace(/<ul[^>]*>|<\/ul>/gi, '\n')
-    .replace(/<ol[^>]*>|<\/ol>/gi, '\n');
-
-  // 5. 移除剩余标签，转为空格
-  text = text.replace(/<[^>]+>/g, ' ');
-
-  // 6. 解码HTML实体（扩展常用字符）
-  text = text
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    // 扩展拉丁字符
-    .replace(/&eacute;/g, 'é').replace(/&Eacute;/g, 'É')
-    .replace(/&egrave;/g, 'è').replace(/&Egrave;/g, 'È')
-    .replace(/&agrave;/g, 'à').replace(/&Agrave;/g, 'À')
-    .replace(/&auml;/g, 'ä').replace(/&Auml;/g, 'Ä')
-    .replace(/&uuml;/g, 'ü').replace(/&Uuml;/g, 'Ü')
-    .replace(/&ouml;/g, 'ö').replace(/&Ouml;/g, 'Ö')
-    .replace(/&iacute;/g, 'í').replace(/&Iacute;/g, 'Í')
-    .replace(/&oacute;/g, 'ó').replace(/&Oacute;/g, 'Ó')
-    .replace(/&uacute;/g, 'ú').replace(/&Uacute;/g, 'Ú')
-    .replace(/&ccedil;/g, 'ç').replace(/&Ccedil;/g, 'Ç')
-    .replace(/&ntilde;/g, 'ñ').replace(/&Ntilde;/g, 'Ñ')
-    // 添加常用引号
-    .replace(/&rsquo;/g, "'")
-    .replace(/&lsquo;/g, "'")
-    .replace(/&ldquo;/g, '"')
-    .replace(/&rdquo;/g, '"')
-    .replace(/&mdash;/g, '—')
-    .replace(/&ndash;/g, '–');
-
-  // 7. 整理空格和换行
-  text = text
-    .replace(/ +/g, ' ')                // 合并多个空格
-    .replace(/ *\n */g, '\n')          // 去掉换行前后的空格
-    .replace(/\n{3,}/g, '\n\n')        // 将3个以上换行压缩为2个（保留一个空行）
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 
   return text;
