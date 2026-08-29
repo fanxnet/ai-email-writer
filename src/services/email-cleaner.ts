@@ -1,9 +1,7 @@
-// ===== 先定义工具函数 =====
 function escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// ===== 常量定义 =====
 const THREAD_BLOCK_STARTERS = [
     'From:',
     'Von:',
@@ -73,13 +71,11 @@ const SIGNATURE_TRIGGERS = [
 const blockStartRegex = new RegExp(`^\\s*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 const extraHeaderRegex = new RegExp(`^\\s*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
-// ===== 类型定义 =====
 type MailBlock = {
     type: 'prefix' | 'mail';
     text: string;
 };
 
-// ===== 辅助判断函数 =====
 function isBlockStartLine(line: string): boolean {
     return blockStartRegex.test(line);
 }
@@ -91,9 +87,6 @@ function lineTriggerSignature(line: string): boolean {
     return SIGNATURE_TRIGGERS.some(keyword => lower.includes(keyword.toLowerCase()));
 }
 
-/**
- * 工具函数：分割文本，同时保留每行原始换行符 \r\n / \n
- */
 function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
     const result: Array<{ line: string; raw: string }> = [];
     if (text.length === 0) return result;
@@ -122,11 +115,6 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
     return result;
 }
 
-/**
- * 切割邮件块，返回带类型标记的块数组
- * prefix：第一个From之前的前置内容，原样保留不清洗
- * mail：标准From开头邮件块，执行header、签名过滤
- */
 function splitMailBlocks(threadText: string): MailBlock[] {
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
@@ -169,36 +157,39 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             result.push({ type: 'mail', text: mailText });
         }
     }
+    // 兜底防护：分割后一个块都没有，原样整段文本降级为prefix返回，杜绝空数组
+    if(result.length === 0 && threadText.trim().length>0){
+        result.push({type:'prefix',text:threadText});
+    }
     return result;
 }
 
-/**
- * 截取邮件线程：保留最新邮件 + keepReplies层历史回复
- */
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
     if (blocks.length === 0) return bodytext;
+
+    const prefixBlocks = blocks.filter(b => b.type === 'prefix');
+    const mailBlocks = blocks.filter(b => b.type === 'mail');
+
     const safeKeep = Math.max(0, keepReplies);
     const takeCount = 1 + safeKeep;
-    const selectedBlocks = blocks.slice(0, takeCount);
-    return selectedBlocks.map(b => b.text).join('');
+    const selectedMails = mailBlocks.slice(0, takeCount);
+
+    return [...prefixBlocks, ...selectedMails].map(b => b.text).join('');
 }
 
-/**
- * 清洗线程文本：块之间完全隔离，prefix‑块原样输出不经过任何过滤
- */
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
+    // 空输入直接原路返回
+    if(!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
     const cleaned: string[] = [];
 
     for (const block of blocks) {
         if (block.type === 'prefix') {
-            // 前置块：原样输出，完全跳过header删除、签名截断，零过滤
             cleaned.push(block.text);
             continue;
         }
 
-        // 标准邮件块：独立清洗，每个块拥有独立的signatureHit，绝不跨块污染
         const rawLines = splitPreserveNewline(block.text);
         const outLines: string[] = [];
         let signatureHit = false;
@@ -219,9 +210,26 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             }
             outLines.push(item.raw);
         }
-        cleaned.push(outLines.join(''));
+        // 兜底：清洗完一行都没剩下，把原始块文本放回去，避免单块清洗成空白
+        if(outLines.length === 0){
+            cleaned.push(block.text);
+        }else{
+            cleaned.push(outLines.join(''));
+        }
     }
 
-    return cleaned.join('');
+    const finalResult = cleaned.join('');
+    // 极端兜底：清洗后完全为空，返回原始输入文本，防止全部丢失
+    if(finalResult.length === 0){
+        return bodytext;
+    }
+    return finalResult;
 }
+
+const raw = emailHtmlToText(...);
+console.log("原始文本长度:",raw.length);
+const blocks = splitMailBlocks(raw);
+console.log("分割块列表:",blocks.map(b=>({type:b.type,preview:b.text.slice(0,80)})));
+const res = cleanThreadEmails(raw,true);
+console.log("清洗后结果长度:",res.length,"结果:",res);
 
