@@ -226,10 +226,3 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
     return finalResult;
 }
 
-const raw = emailHtmlToText(...);
-console.log("原始文本长度:",raw.length);
-const blocks = splitMailBlocks(raw);
-console.log("分割块列表:",blocks.map(b=>({type:b.type,preview:b.text.slice(0,80)})));
-const res = cleanThreadEmails(raw,true);
-console.log("清洗后结果长度:",res.length,"结果:",res);
-
