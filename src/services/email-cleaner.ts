@@ -1,3 +1,9 @@
+// ===== 先定义工具函数 =====
+function escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ===== 常量定义 =====
 /**
  * 多语种：邮件回复块起始标记（From类头部）
  */
@@ -52,19 +58,14 @@ const SIGNATURE_TRIGGERS = [
     '祝好',
     '此致',
     '敬礼',
-    'Angelina Liu',
+    'Angelina Liu',  // 自定义
 ];
 
-// 构建正则：邮件块起始锚点 (不区分大小写)
+// 构建正则（此时 escapeRegExp 已定义）
 const blockStartRegex = new RegExp(`^\\s*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
-
-// 多余头部字段正则
 const extraHeaderRegex = new RegExp(`^\\s*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
-function escapeRegExp(str:string):string{
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
+// ===== 辅助判断函数 =====
 function isBlockStartLine(line: string): boolean {
     return blockStartRegex.test(line);
 }
@@ -78,6 +79,7 @@ function lineTriggerSignature(line: string): boolean {
     return SIGNATURE_TRIGGERS.some(keyword => lower.includes(keyword.toLowerCase()));
 }
 
+// ===== 核心处理函数 =====
 /**
  * 工具函数：分割文本，同时保留每行原始换行符 \r\n / \n
  */
