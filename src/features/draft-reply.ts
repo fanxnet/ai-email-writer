@@ -57,10 +57,10 @@ export interface EmailContext {
 const MAX_CONTENT_TOKENS = 6000;
 
 /** Thread off: keep the current email plus the newest 2 replies. */
-export const MIN_KEEP_REPLIES = 3;
+export const MIN_KEEP_REPLIES = 2;
 
 /** Thread on: keep a longer original-email reply context. */
-export const MAX_KEEP_REPLIES = 9;
+export const MAX_KEEP_REPLIES = 8;
 
 // ---------------------------------------------------------------------------
 // State
@@ -134,8 +134,8 @@ export async function generateReply(
   // - Thread on: keep a longer reply context (up to MAX_KEEP_REPLIES messages).
   // Both are truncated on the HTML structure, then cleaned message-by-message.
   const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
-  const emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
-
+//  const emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
+  const emailBody = cleanThreadEmails(context.body ?? '', true);
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
