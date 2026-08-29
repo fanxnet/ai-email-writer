@@ -87,11 +87,13 @@ export function getItemMode(): ItemMode {
  */
 
 export function emailHtmlToText (
-html: string,
-options: {stripQuoted?: boolean} = {},
+  html: string,
+  options: {
+    stripQuoted?: boolean;
+    fixSplitMailHeaders?: boolean;
+  } = {},
 ): string {
-  const { stripQuoted = false } = options;
-
+  const { stripQuoted = false, fixSplitMailHeaders = true } = options;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
@@ -153,8 +155,21 @@ options: {stripQuoted?: boolean} = {},
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+  // --------------------新增：合并跨行断裂邮件头--------------------
+  if(fixSplitMailHeaders){
+    const starters = ['From:','De:','Von:','发件人：','Sender:','Expéditeur :','Remitente:','Remetente:'];
+    const escapeRegExp = (s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    // 匹配：孤立标记行 + 换行，且下一行包含邮箱尖括号 <
+    const rx = new RegExp(
+        `^[\\s\\u00A0]*(${starters.map(escapeRegExp).join('|')})\\s*\\r?\\n(?=.*<)`,
+        'gim'
+    );
+    text = text.replace(rx, '$1 ');
+  }
+
   return text;
 }
+
 
 /**
  * Read the body of the currently open email as plain text.

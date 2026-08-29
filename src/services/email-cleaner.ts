@@ -68,7 +68,7 @@ const SIGNATURE_TRIGGERS = [
     'Angelina Liu'
 ];
 
-const starterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})\\s*$`, 'i');
+const starterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
 type MailBlock = {
@@ -77,10 +77,10 @@ type MailBlock = {
 };
 
 /**
- * 判断本行是否为 孤立跨行头标记：From:/De: 后面无内容
+ * 判断一行是否为邮件分割起点（预处理合并完成后，From:/De: 与邮箱在同一行）
  */
-function isLonelyStarterLine(line: string): boolean {
-    return starterRx.test(line);
+function isMailBlockStartLine(line: string): boolean {
+    return starterRx.test(line) && line.includes('<');
 }
 
 function isExtraHeaderLine(line: string): boolean {
@@ -95,26 +95,19 @@ function lineTriggerSignature(line: string): boolean {
 function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
     const result: Array<{ line: string; raw: string }> = [];
     if (text.length === 0) return result;
-
     let pos = 0;
     while (pos < text.length) {
         const nlIndex = text.indexOf('\n', pos);
         if (nlIndex === -1) {
             const lineContent = text.slice(pos);
-            result.push({
-                line: lineContent,
-                raw: lineContent
-            });
+            result.push({ line: lineContent, raw: lineContent });
             break;
         }
         const isCrLf = nlIndex > 0 && text[nlIndex - 1] === '\r';
         const lineEnd = isCrLf ? nlIndex - 1 : nlIndex;
         const lineContent = text.slice(pos, lineEnd);
         const newlineStr = isCrLf ? '\r\n' : '\n';
-        result.push({
-            line: lineContent,
-            raw: lineContent + newlineStr
-        });
+        result.push({ line: lineContent, raw: lineContent + newlineStr });
         pos = nlIndex + 1;
     }
     return result;
@@ -127,59 +120,19 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     let preBuffer: string[] = [];
     let currentBlock: string[] | null = null;
 
-    // 前瞻缓存：上一行是孤立 From:/De:，等待下一行邮箱
-    let pendingStarterRaw: string | null = null;
-
     for (const item of rawLines) {
         const textLine = item.line;
-
-        // 状态：上一行已经命中孤立 From:/De:
-        if(pendingStarterRaw !== null){
-            // 如果当前行含有邮箱尖括号，判定：新旧邮件分割点
-            if(textLine.includes('<')){
-                if(currentBlock !== null && currentBlock.length>0){
-                    blocks.push(currentBlock);
-                }
-                currentBlock = [];
-                // 把两行合并一起推入新邮件块
-                currentBlock.push(pendingStarterRaw);
-                currentBlock.push(item.raw);
-                pendingStarterRaw = null;
-                continue;
-            }else{
-                // 下一行没有邮箱：不是引用头，取消前瞻，两行都当作普通正文
-                if(currentBlock === null){
-                    preBuffer.push(pendingStarterRaw);
-                    preBuffer.push(item.raw);
-                }else{
-                    currentBlock.push(pendingStarterRaw);
-                    currentBlock.push(item.raw);
-                }
-                pendingStarterRaw = null;
-                continue;
+        if (isMailBlockStartLine(textLine)) {
+            if (currentBlock !== null && currentBlock.length > 0) {
+                blocks.push(currentBlock);
             }
-        }
-
-        // 当前行是否是孤立 From:/De:
-        if(isLonelyStarterLine(textLine)){
-            pendingStarterRaw = item.raw;
+            currentBlock = [item.raw];
             continue;
         }
-
-        // 普通行，正常加入缓冲区
-        if(currentBlock === null){
+        if (currentBlock === null) {
             preBuffer.push(item.raw);
-        }else{
+        } else {
             currentBlock.push(item.raw);
-        }
-    }
-
-    // 循环结束，还有残留未处理的孤立starter，当作普通文本
-    if(pendingStarterRaw !== null){
-        if(currentBlock === null){
-            preBuffer.push(pendingStarterRaw);
-        }else{
-            currentBlock.push(pendingStarterRaw);
         }
     }
 
@@ -209,14 +162,11 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
     if (blocks.length === 0) return bodytext;
-
     const prefixBlocks = blocks.filter(b => b.type === 'prefix');
     const mailBlocks = blocks.filter(b => b.type === 'mail');
-
     const safeKeep = Math.max(0, keepReplies);
     const takeCount = 1 + safeKeep;
     const selectedMails = mailBlocks.slice(0, takeCount);
-
     return [...prefixBlocks, ...selectedMails].map(b => b.text).join('');
 }
 
@@ -230,15 +180,13 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             cleaned.push(block.text);
             continue;
         }
-
         const rawLines = splitPreserveNewline(block.text);
         const outLines: string[] = [];
         let signatureHit = false;
-
         for (const item of rawLines) {
             if (signatureHit) continue;
             const line = item.line;
-            if (isLonelyStarterLine(line)) {
+            if (isMailBlockStartLine(line)) {
                 outLines.push(item.raw);
                 continue;
             }
@@ -251,17 +199,10 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             }
             outLines.push(item.raw);
         }
-        if (outLines.length === 0) {
-            cleaned.push(block.text);
-        } else {
-            cleaned.push(outLines.join(''));
-        }
+        cleaned.push(outLines.length ? outLines.join('') : block.text);
     }
 
     const finalResult = cleaned.join('');
-    if (finalResult.length === 0) {
-        return bodytext;
-    }
-    return finalResult;
+    return finalResult.length ? finalResult : bodytext;
 }
 
