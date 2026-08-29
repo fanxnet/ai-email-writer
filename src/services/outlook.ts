@@ -85,11 +85,10 @@ export function getItemMode(): ItemMode {
  * @param html - HTML string of the email body
  * @param options.stripQuoted - Whether to remove quoted/replied content (default: false)
  */
-  /** 是否移除历史引用块，false = 全部保留历史邮件正文 */
 
-export function emailHtmlToText(
-  html: string,
-  options: EmailHtmlToTextOptions = {},
+export function emailHtmlToText (
+html: string,
+options: {stripQuoted?: boolean} = {},
 ): string {
   const { stripQuoted = false } = options;
 
