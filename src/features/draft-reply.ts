@@ -19,7 +19,7 @@ import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
 import { emailHtmlToText, getCurrentEmailBodyHtml, getCurrentEmailSubject, getOriginalSender, getItemMode, EmailContact } from '../services/outlook';
-import { cleanThreadEmails } from '../services/email-cleaner';
+import { buildThreadBodyText, cleanThreadEmails } from '../services/email-cleaner';
 import { getSessionKey } from './auto-save';
 import {
   appendTurn,
@@ -112,19 +112,6 @@ export function clearEmailContext(): void {
 }
 
 /**
- * Build the email body text for a reply prompt: flatten the thread HTML to
- * text (keeping quoted containers so the full thread survives), split it into
- * messages by the "From:"/"De:"/wrote: sender features, keep the newest
- * `keepReplies` messages, then clean each (non-sender headers incl. multi-line
- * recipient lists, signatures, disclaimers, placeholders), keeping the sender
- * line as attribution.
- * Used by both the reply and suggest-replies flows.
- */
-export function buildThreadBodyText(bodyHtml: string, keepReplies: number): string {
-  return cleanThreadEmails(emailHtmlToText(bodyHtml, { stripQuoted: false }), keepReplies);
-}
-
-/**
  * Generate a reply to the current email.
  */
 export async function generateReply(
@@ -147,9 +134,8 @@ export async function generateReply(
   // - Thread on: keep a longer reply context (up to MAX_KEEP_REPLIES messages).
   // Both are truncated on the HTML structure, then cleaned message-by-message.
   const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
-  const emailBody = buildThreadBodyText(context.bodyHtml ?? '', KEEP_REPLIES);
-//  const emailBody = emailHtmlToText(context.bodyHtml, { stripQuoted: false });
-//  const emailBody = context.bodyHtml;
+  const emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
+
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
