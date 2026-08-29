@@ -1,6 +1,4 @@
 /**
- * AI Compose — Email bodytext Cleaner
- *
  * 多语种：邮件回复块起始标记（From类头部）
  */
 const THREAD_BLOCK_STARTERS = [
@@ -43,108 +41,127 @@ const HEADER_REMOVE_LIST = [
  * 多语种签名截断关键词，命中后删除该行至本邮件块末尾
  */
 const SIGNATURE_TRIGGERS = [
-    // English
     'Regards,',
     'Best regards,',
     'Thanks,',
     'Thank you,',
     'Sincerely,',
-    // 德语
     'Mit freundlichen Grüßen',
-    // 法语
     'Cordialement,',
-    // 中文
     '顺颂商祺',
     '祝好',
     '此致',
-    '敬礼'
+    '敬礼',
+    'Angelina Liu',
 ];
 
-/**
- * 判断一行文本是否为邮件块起始行(From/发件人：...)
- */
+// 构建正则：邮件块起始锚点 (不区分大小写)
+const blockStartRegex = new RegExp(`^\\s*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
+
+// 多余头部字段正则
+const extraHeaderRegex = new RegExp(`^\\s*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
+
+function escapeRegExp(str:string):string{
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function isBlockStartLine(line: string): boolean {
-    const trimmed = line.trimStart();
-    return THREAD_BLOCK_STARTERS.some(starter =>
-        trimmed.toLowerCase().startsWith(starter.toLowerCase())
-    );
+    return blockStartRegex.test(line);
 }
 
-/**
- * 判断一行是否属于待删除的多余邮件头
- */
 function isExtraHeaderLine(line: string): boolean {
-    const trimmed = line.trimStart();
-    return HEADER_REMOVE_LIST.some(prefix =>
-        trimmed.toLowerCase().startsWith(prefix.toLowerCase())
-    );
+    return extraHeaderRegex.test(line);
 }
 
-/**
- * 判断该行命中签名截断关键词（不区分大小写）
- */
 function lineTriggerSignature(line: string): boolean {
     const lower = line.toLowerCase();
     return SIGNATURE_TRIGGERS.some(keyword => lower.includes(keyword.toLowerCase()));
 }
 
 /**
- * 将完整线程纯文本，切割成一封一封邮件块数组
- * @param threadText emailHtmlToText输出结果（每封邮件均以From‑头部开头）
+ * 工具函数：分割文本，同时保留每行原始换行符 \r\n / \n
+ */
+function splitPreserveNewline(text: string): Array<{line: string, raw: string}> {
+    const result: Array<{line: string, raw: string}> = [];
+    const regex = /([^\r\n]*)(\r?\n|$)/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+        const content = match[1];
+        const newline = match[2];
+        result.push({
+            line: content,
+            raw: content + newline
+        });
+    }
+    return result;
+}
+
+/**
+ * 切割邮件块，保留原始换行符
  */
 function splitMailBlocks(threadText: string): string[] {
-    const lines = threadText.split(/\r?\n/);
+    const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
+    let currentBlock: string[] = [];
 
-    for (const line of lines) {
-        if (isBlockStartLine(line)) {
-            blocks.push([line]);
-        } else if (blocks.length > 0) {
-            blocks[blocks.length - 1].push(line);
+    for (const item of rawLines) {
+        const textLine = item.line;
+        if (isBlockStartLine(textLine)) {
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock);
+                currentBlock = [];
+            }
+            currentBlock.push(item.raw);
+        } else {
+            currentBlock.push(item.raw);
         }
     }
-    return blocks.map(b => b.join('\n'));
+    if (currentBlock.length > 0) {
+        blocks.push(currentBlock);
+    }
+    return blocks.map(b => b.join(''));
 }
 
 /**
  * 截取邮件线程：保留最新邮件 + keepReplies层历史回复
- * @param bodytext 原始邮件HTML
+ * @param bodytext 原始邮件纯文本（经 emailHtmlToText 转换后的完整线程）
  * @param keepReplies 需要保留往上多少层历史回复
- * @returns 截取后的线程文本
+ * @returns 截取后的线程文本（格式与输入完全一致，仅裁切块数）
  */
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
 
     if (blocks.length === 0) return bodytext;
 
-    // 负数保护：最多只保留最新一封
     const safeKeep = Math.max(0, keepReplies);
     const takeCount = 1 + safeKeep;
 
     const selectedBlocks = blocks.slice(0, takeCount);
-    return selectedBlocks.join('\n\n').trim();
+    // 直接拼接，不添加额外分隔符，保留原始格式
+    return selectedBlocks.join('').trimEnd();
 }
 
 /**
- * 清洗线程文本：只保留From类头部，删除其余邮件头；移除邮件签名
- * @param bodyText buildThreadBodyText输出文本
+ * 清洗线程文本：只保留From类头部，删除其余邮件头；移除邮件签名（从特征词如"regards"开始到本邮件结束全部删除）
+ * @param bodytext buildThreadBodyText 输出文本
  * @param removeSignature 是否开启签名删除，默认true
+ * @returns 清洗后的文本（格式不变，仅删除指定内容）
  */
-export function cleanThreadEmails(bodyText: string, removeSignature = true): string {
-    const blocks = splitMailBlocks(bodyText);
+export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
+    const blocks = splitMailBlocks(bodytext);
     const cleanedBlocks: string[] = [];
 
     for (const block of blocks) {
-        const lines = block.split(/\r?\n/);
+        const rawLines = splitPreserveNewline(block);
         const outLines: string[] = [];
         let signatureHit = false;
 
-        for (const line of lines) {
+        for (const item of rawLines) {
             if (signatureHit) continue;
-
+            const line = item.line;
             // From‑头部行 → 保留
             if (isBlockStartLine(line)) {
-                outLines.push(line);
+                outLines.push(item.raw);
                 continue;
             }
             // 多余邮件头 → 跳过删除
@@ -156,11 +173,11 @@ export function cleanThreadEmails(bodyText: string, removeSignature = true): str
                 signatureHit = true;
                 continue;
             }
-            outLines.push(line);
+            outLines.push(item.raw);
         }
-        cleanedBlocks.push(outLines.join('\n'));
+        cleanedBlocks.push(outLines.join(''));
     }
 
-    return cleanedBlocks.join('\n\n').trim();
+    // 直接拼接，不添加额外分隔符
+    return cleanedBlocks.join('').trimEnd();
 }
-
