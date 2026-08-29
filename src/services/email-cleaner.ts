@@ -68,7 +68,7 @@ const SIGNATURE_TRIGGERS = [
     'Angelina Liu'
 ];
 
-// 修复：[\s\u00A0] 兼容不间断空格
+// 两条正则统一兼容不间断空格 \u00A0
 const blockStartRegex = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
@@ -207,6 +207,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
                 continue;
             }
             if (isExtraHeaderLine(line)) {
+                // 命中待删除头部，跳过，不加入输出
                 continue;
             }
             if (removeSignature && lineTriggerSignature(line)) {
