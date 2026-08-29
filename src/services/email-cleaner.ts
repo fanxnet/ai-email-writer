@@ -2,7 +2,6 @@
 function escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
 // ===== 常量定义 =====
 /**
  * 多语种：邮件回复块起始标记（From类头部）
@@ -16,7 +15,6 @@ const THREAD_BLOCK_STARTERS = [
     'Expéditeur :',
     'Remitente:'
 ];
-
 /**
  * 需要删除的邮件头前缀列表（多语种）
  */
@@ -42,7 +40,6 @@ const HEADER_REMOVE_LIST = [
     'Date :',
     '日期：'
 ];
-
 /**
  * 多语种签名截断关键词，命中后删除该行至本邮件块末尾
  */
@@ -60,52 +57,63 @@ const SIGNATURE_TRIGGERS = [
     '敬礼',
     'Angelina Liu',  // 自定义
 ];
-
 // 构建正则（此时 escapeRegExp 已定义）
 const blockStartRegex = new RegExp(`^\\s*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 const extraHeaderRegex = new RegExp(`^\\s*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
-
 // ===== 辅助判断函数 =====
 function isBlockStartLine(line: string): boolean {
     return blockStartRegex.test(line);
 }
-
 function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
 }
-
 function lineTriggerSignature(line: string): boolean {
     const lower = line.toLowerCase();
     return SIGNATURE_TRIGGERS.some(keyword => lower.includes(keyword.toLowerCase()));
 }
-
 // ===== 核心处理函数 =====
 /**
  * 工具函数：分割文本，同时保留每行原始换行符 \r\n / \n
+ * 修复：废弃/g正则循环，消除死循环、invalid‑array‑length报错
  */
-function splitPreserveNewline(text: string): Array<{line: string, raw: string}> {
-    const result: Array<{line: string, raw: string}> = [];
-    const regex = /([^\r\n]*)(\r?\n|$)/g;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
-        const content = match[1];
-        const newline = match[2];
+function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
+    const result: Array<{ line: string; raw: string }> = [];
+    if (text.length === 0) return result;
+
+    let pos = 0;
+    while (pos < text.length) {
+        // 查找下一处换行位置
+        const nlIndex = text.indexOf('\n', pos);
+        if (nlIndex === -1) {
+            // 剩余最后一行，无换行
+            const lineContent = text.slice(pos);
+            result.push({
+                line: lineContent,
+                raw: lineContent
+            });
+            break;
+        }
+        // 判断是否 \r\n
+        const isCrLf = nlIndex > 0 && text[nlIndex - 1] === '\r';
+        const lineEnd = isCrLf ? nlIndex - 1 : nlIndex;
+        const lineContent = text.slice(pos, lineEnd);
+        const newlineStr = isCrLf ? '\r\n' : '\n';
         result.push({
-            line: content,
-            raw: content + newline
+            line: lineContent,
+            raw: lineContent + newlineStr
         });
+        pos = nlIndex + 1;
     }
     return result;
 }
 
 /**
- * 切割邮件块，保留原始换行符
+ * 切割邮件块，保留原始换行符与原文格式，只做拆分不修改内容
  */
 function splitMailBlocks(threadText: string): string[] {
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
     let currentBlock: string[] = [];
-
     for (const item of rawLines) {
         const textLine = item.line;
         if (isBlockStartLine(textLine)) {
@@ -132,12 +140,9 @@ function splitMailBlocks(threadText: string): string[] {
  */
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
-
     if (blocks.length === 0) return bodytext;
-
     const safeKeep = Math.max(0, keepReplies);
     const takeCount = 1 + safeKeep;
-
     const selectedBlocks = blocks.slice(0, takeCount);
     // 直接拼接，不添加额外分隔符，保留原始格式
     return selectedBlocks.join('').trimEnd();
@@ -152,12 +157,10 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     const blocks = splitMailBlocks(bodytext);
     const cleanedBlocks: string[] = [];
-
     for (const block of blocks) {
         const rawLines = splitPreserveNewline(block);
         const outLines: string[] = [];
         let signatureHit = false;
-
         for (const item of rawLines) {
             if (signatureHit) continue;
             const line = item.line;
@@ -179,7 +182,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         }
         cleanedBlocks.push(outLines.join(''));
     }
-
     // 直接拼接，不添加额外分隔符
     return cleanedBlocks.join('').trimEnd();
 }
+
