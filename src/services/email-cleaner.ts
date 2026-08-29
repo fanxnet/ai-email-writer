@@ -68,8 +68,9 @@ const SIGNATURE_TRIGGERS = [
     'Angelina Liu'
 ];
 
-const blockStartRegex = new RegExp(`^\\s*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
-const extraHeaderRegex = new RegExp(`^\\s*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
+// 修复：[\s\u00A0] 兼容不间断空格
+const blockStartRegex = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
+const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
 type MailBlock = {
     type: 'prefix' | 'mail';
@@ -77,7 +78,9 @@ type MailBlock = {
 };
 
 function isBlockStartLine(line: string): boolean {
-    return blockStartRegex.test(line);
+    const ok = blockStartRegex.test(line);
+    console.debug('[isBlockStartLine]', ok, 'line=', JSON.stringify(line));
+    return ok;
 }
 function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
@@ -116,6 +119,7 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
 }
 
 function splitMailBlocks(threadText: string): MailBlock[] {
+    console.debug('[splitMailBlocks] input length:', threadText.length);
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
     let preBuffer: string[] = [];
@@ -125,6 +129,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         const textLine = item.line;
         if (currentBlock === null) {
             if (isBlockStartLine(textLine)) {
+                console.debug('[splitMailBlocks] hit first‑From, switch‑to‑mail‑block');
                 currentBlock = [];
                 currentBlock.push(item.raw);
             } else {
@@ -157,10 +162,11 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             result.push({ type: 'mail', text: mailText });
         }
     }
-    // 兜底防护：分割后一个块都没有，原样整段文本降级为prefix返回，杜绝空数组
     if(result.length === 0 && threadText.trim().length>0){
+        console.debug('[splitMailBlocks] fallback‑all‑to‑prefix');
         result.push({type:'prefix',text:threadText});
     }
+    console.debug('[splitMailBlocks] final blocks',result.map(x=>({type:x.type,preview:x.text.slice(0,60)})));
     return result;
 }
 
@@ -179,7 +185,6 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
 }
 
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
-    // 空输入直接原路返回
     if(!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
     const cleaned: string[] = [];
@@ -210,7 +215,6 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             }
             outLines.push(item.raw);
         }
-        // 兜底：清洗完一行都没剩下，把原始块文本放回去，避免单块清洗成空白
         if(outLines.length === 0){
             cleaned.push(block.text);
         }else{
@@ -219,7 +223,6 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
     }
 
     const finalResult = cleaned.join('');
-    // 极端兜底：清洗后完全为空，返回原始输入文本，防止全部丢失
     if(finalResult.length === 0){
         return bodytext;
     }
