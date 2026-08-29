@@ -77,45 +77,59 @@ export function getItemMode(): ItemMode {
 // ---------------------------------------------------------------------------
 // Email body
 // ---------------------------------------------------------------------------
-
 /**
  * Strip HTML tags from email content, preserving only the display text of
  * hyperlinks (discarding href targets) and paragraph line breaks.
  * This ensures the AI prompt receives human-readable, well-structured text.
+ * 
+ * @param html - HTML string of the email body
+ * @param options.stripQuoted - Whether to remove quoted/replied content (default: false)
  */
 export function emailHtmlToText(
   html: string,
   options: { stripQuoted?: boolean } = {},
 ): string {
   let text = html;
-  // Remove quoted/replied content containers (thread history)
-  // Note: msonormal NOT filtered — Outlook Classic uses it for ALL content
-  if (options.stripQuoted !== false) {
+
+  // 1. 移除引用块（默认保留，以显示完整线程）
+  if (options.stripQuoted === true) {
     text = text
       .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, '')
       .replace(/<div\s+class="gmail_quote"[\s\S]*?<\/div>/gi, '')
       .replace(/<div\s+id="gmail_quote"[\s\S]*?<\/div>/gi, '')
       .replace(/<div\s+class="yahoo_quoted"[\s\S]*?<\/div>/gi, '');
   }
-  return text
-    // Remove existing logic
+
+  // 2. 移除样式/脚本
+  text = text
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    // <a> tags → keep display text only, drop href
-    .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1')
-    // Block-level elements → newlines
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+  // 3. 超链接保留文本
+  text = text.replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1');
+
+  // 4. 块级元素转为换行（增加表格、列表等）
+  text = text
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<hr\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
-    // Strip remaining tags
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<\/(p|div|li|tr|h[1-6]|td|th|ul|ol)>/gi, '\n')  // 新增 td, th, ul, ol
+    // 在列表项前也加换行（避免粘连）
+    .replace(/<li[^>]*>/gi, '\n• ')   // 可选，添加项目符号
+    .replace(/<ul[^>]*>|<\/ul>/gi, '\n')
+    .replace(/<ol[^>]*>|<\/ol>/gi, '\n');
+
+  // 5. 移除剩余标签，转为空格
+  text = text.replace(/<[^>]+>/g, ' ');
+
+  // 6. 解码HTML实体（扩展常用字符）
+  text = text
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    // Decode common Latin accented entities (localized quoted headers)
+    // 扩展拉丁字符
     .replace(/&eacute;/g, 'é').replace(/&Eacute;/g, 'É')
     .replace(/&egrave;/g, 'è').replace(/&Egrave;/g, 'È')
     .replace(/&agrave;/g, 'à').replace(/&Agrave;/g, 'À')
@@ -127,13 +141,22 @@ export function emailHtmlToText(
     .replace(/&uacute;/g, 'ú').replace(/&Uacute;/g, 'Ú')
     .replace(/&ccedil;/g, 'ç').replace(/&Ccedil;/g, 'Ç')
     .replace(/&ntilde;/g, 'ñ').replace(/&Ntilde;/g, 'Ñ')
-    // Collapse multiple spaces within a line
-    .replace(/ +/g, ' ')
-    // Trim whitespace around newlines
-    .replace(/ *\n */g, '\n')
-    // Collapse 3+ consecutive newlines into 2 (single blank line)
-    .replace(/\n{3,}/g, '\n\n')
+    // 添加常用引号
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–');
+
+  // 7. 整理空格和换行
+  text = text
+    .replace(/ +/g, ' ')                // 合并多个空格
+    .replace(/ *\n */g, '\n')          // 去掉换行前后的空格
+    .replace(/\n{3,}/g, '\n\n')        // 将3个以上换行压缩为2个（保留一个空行）
     .trim();
+
+  return text;
 }
 
 /**
