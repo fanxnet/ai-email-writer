@@ -63,10 +63,11 @@ const SIGNATURE_TRIGGERS = [
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
 
-// ==========修复1：孤立starter正则恢复整行匹配$，同时强制冒号后带空格==========
-const lonelyStarterRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})\\s+$`, 'i');
-// 单行完整分割头
-const inlineStarterRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})`, 'i');
+// ==========分割核心修复1：单行完整分割头，标记后强制跟空格==========
+// 必须是 「标记 + 空格 + 内容」才判定为邮件头，避免短标记误匹配前缀
+const inlineStarterRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})\\s+`, 'i');
+// ==========分割核心修复2：孤立starter严格整行匹配，标记+空格+行尾==========
+const lonelyStarterRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})\\s*$`, 'i');
 
 // Expéditeur兼容冒号前有无空格
 const extraHeaderRxItems = HEADER_REMOVE_LIST.filter(item => item !== 'Expéditeur :')
@@ -88,7 +89,7 @@ function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
 }
 
-// ==========修复2：签名检测 前缀≤5字符 + 尾部≤12字符==========
+// 签名检测：前缀≤5字符 + 尾部≤12字符
 function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
     const trimmed = line.trim();
@@ -115,14 +116,12 @@ function lineTriggerSignature(line: string): boolean {
     return false;
 }
 
-// ==========工具：判断一行是不是横线分割线（覆盖所有常见HR转文本字符）==========
+// 通用横线判断：覆盖所有HR转文本字符
 function isHorizontalRuleLine(line: string): boolean {
     const trimmed = line.trim();
     if(trimmed.length < 5) return false;
     const firstChar = trimmed[0];
-    // 常见横线字符：减号、等号、下划线、全角破折号、长破折号、波浪线
     if(!['-','=','_','—','―','~'].includes(firstChar)) return false;
-    // 该行90%以上都是同一个字符，判定为横线
     let sameCount = 0;
     for(const ch of trimmed){
         if(ch === firstChar) sameCount++;
@@ -133,7 +132,6 @@ function isHorizontalRuleLine(line: string): boolean {
 function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
     const result: Array<{ line: string; raw: string }> = [];
     if (text.length === 0) return result;
-    // NBSP不间断空格清理
     text = text.replace(/\u00A0/g, ' ');
     let pos = 0;
     while (pos < text.length) {
@@ -153,6 +151,7 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
     return result;
 }
 
+// ===================== 分割阶段：只做块切分，不做内容过滤 =====================
 function splitMailBlocks(threadText: string): MailBlock[] {
     console.debug('[splitMailBlocks] input length:', threadText.length);
     const rawLines = splitPreserveNewline(threadText);
@@ -163,7 +162,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     for (const item of rawLines) {
         const textLine = item.line;
 
-        // ==========修复3：全字符横线防御，跳过所有分割检测==========
+        // 横线防御：最优先判断，直接归入当前块，跳过所有分割检测
         if (isHorizontalRuleLine(textLine)) {
             if (currentBlock === null) {
                 currentBlock = [item.raw];
@@ -174,15 +173,13 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             continue;
         }
 
-        // ---------- 情况A：上一行缓存了孤立starter ----------
+        // 情况A：上一行缓存了孤立starter
         if (pendingStarterRaw !== null) {
             if (textLine.includes('<')) {
                 if (currentBlock !== null && currentBlock.length > 0) {
                     blocks.push(currentBlock);
                 }
-                currentBlock = [];
-                currentBlock.push(pendingStarterRaw);
-                currentBlock.push(item.raw);
+                currentBlock = [pendingStarterRaw, item.raw];
                 pendingStarterRaw = null;
             } else {
                 if (currentBlock === null) {
@@ -195,7 +192,8 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             }
             continue;
         }
-        // ---------- 情况B：本行就是完整单行分割头 ----------
+
+        // 情况B：本行是完整单行分割头（标记+空格+包含<）
         if (isInlineMailStartLine(textLine)) {
             if (currentBlock !== null && currentBlock.length > 0) {
                 blocks.push(currentBlock);
@@ -203,19 +201,22 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             currentBlock = [item.raw];
             continue;
         }
-        // ---------- 情况C：命中孤立 From:/De:，先缓存，看下一行 ----------
+
+        // 情况C：命中孤立starter行，缓存看下一行
         if (isLonelyStarterLine(textLine)) {
             pendingStarterRaw = item.raw;
             continue;
         }
-        // ---------- 普通文本行 ----------
+
+        // 普通文本行
         if (currentBlock === null) {
             currentBlock = [item.raw];
         } else {
             currentBlock.push(item.raw);
         }
     }
-    // 循环结束，残留未匹配的孤立starter，归入当前邮件块
+
+    // 收尾：残留starter归入当前块
     if (pendingStarterRaw !== null) {
         if (currentBlock === null) {
             currentBlock = [pendingStarterRaw];
@@ -226,19 +227,20 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     if (currentBlock !== null && currentBlock.length > 0) {
         blocks.push(currentBlock);
     }
-    // 组装结果，全部为 mail 块
+
     const result: MailBlock[] = blocks
         .map(b => b.join(''))
         .filter(mailText => mailText.trim().length > 0)
         .map(text => ({ type: 'mail', text }));
-    // 兜底：零分割标记，全文当做一封邮件
+
     if (result.length === 0 && threadText.trim().length > 0) {
-        console.debug('[splitMailBlocks] fallback‑all‑to‑mail');
+        console.debug('[splitMailBlocks] fallback-all-to-mail');
         result.push({ type: 'mail', text: threadText });
     }
     console.debug('[splitMailBlocks] blocks count =', result.length);
     return result;
 }
+
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
     if (blocks.length === 0) return bodytext;
@@ -253,11 +255,11 @@ function compressBlankLines(text: string): string {
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
+// ===================== 清理阶段：分割完成后，块内过滤 =====================
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
     const cleaned: string[] = [];
-    // 头部区块最大行数保护，防止无限删正文
     const MAX_HEADER_LINES = 20;
 
     for (let i = 0; i < blocks.length; i++) {
@@ -272,10 +274,9 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             if (signatureHit) continue;
             const line = item.line;
 
-            // ==========修复4：头部区块退出条件 + 行数兜底==========
+            // 头部区块退出：空白行 / 横线 / 超过最大行数
             if (insideHeaderBlock) {
                 headerLineCount++;
-                // 退出条件：空白行 / 横线 / 超过最大行数
                 if (line.trim() === '' || isHorizontalRuleLine(line) || headerLineCount >= MAX_HEADER_LINES) {
                     insideHeaderBlock = false;
                     headerLineCount = 0;
