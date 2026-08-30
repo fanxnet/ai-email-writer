@@ -20,7 +20,6 @@ export async function generateText(prompt: string, options: any = {}): Promise<s
   else { 
       return geminiGenerateText(prompt, opts);
   }
-
 }
 
 export async function generateJson<T>(prompt: string, options: any = {}): Promise<T> {
