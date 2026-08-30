@@ -6,6 +6,7 @@ const THREAD_BLOCK_STARTERS = [
     'Von:',
     'De:',
     '发件人：',
+    '发件人:',
     'Sender:',
     'Expéditeur :',
     'Remitente:',
