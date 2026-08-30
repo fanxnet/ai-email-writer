@@ -134,7 +134,15 @@ export async function generateReply(
   // - Thread on: keep a longer reply context (up to MAX_KEEP_REPLIES messages).
   // Both are truncated on the HTML structure, then cleaned message-by-message.
   const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
+  if (/testbuildThreadBodyText/i.test(DraftReplyOptions.instructions)) {
+  const emailBody = buildThreadBodyText(context.body ?? '', KEEP_REPLIES);
+  } 
+  else if (/testemailHtmlToText/i.test(DraftReplyOptions.instructions)) { 
+  const emailBody = context.body ;
+  }
+  else { 
   const emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
+  }
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
