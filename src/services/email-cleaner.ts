@@ -234,17 +234,25 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
  * @param text 单封邮件正文
  * @returns 处理后文本
  */
+/**
+ * 压缩块内部多余空行：连续多行空白只保留一行空行
+ * @param text 单封邮件正文
+ * @returns 处理后文本
+ */
 function compressBlankLines(text: string): string {
-    // 匹配：换行 + 任意空白字符 + 一个或多个换行
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
+
+// 邮件分隔标记，你可以随时修改
+const MAIL_SEPARATOR = "--MAIL SPLIT MARKER--";
 
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
     const cleaned: string[] = [];
 
-    for (const block of blocks) {
+    for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
         const rawLines = splitPreserveNewline(block.text);
         const outLines: string[] = [];
         let signatureHit = false;
@@ -268,8 +276,15 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         }
 
         let blockContent = outLines.length ? outLines.join('') : block.text;
-        // ===== 每个邮件块处理完之后，清理内部冗余空行 =====
         blockContent = compressBlankLines(blockContent);
+
+        // 从第2封邮件开始，头部添加分隔符
+        if(i > 0){
+            blockContent = `\n${MAIL_SEPARATOR}\n` + blockContent;
+        }
+        // 每一封邮件末尾统一追加一个空行
+        blockContent += "\n";
+
         cleaned.push(blockContent);
     }
 
