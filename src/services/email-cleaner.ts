@@ -71,7 +71,7 @@ const inlineStarterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s
 const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
 
 type MailBlock = {
-    type: 'prefix' | 'mail';
+    type: 'mail';
     text: string;
 };
 
@@ -91,34 +91,27 @@ function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
     const trimmed = line.trim();
     if (trimmed.length === 0) return false;
-
     const MAX_SIGNATURE_LINE = 30;
     if (trimmed.length > MAX_SIGNATURE_LINE) return false;
     if (trimmed.includes('?')) return false;
 
     const lowerLine = trimmed.toLowerCase();
-    // 关键词结束后，允许剩余的最大字符数（标点+空格+短署名）
     const MAX_TAIL_CHARS = 12;
 
     for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();
         const pos = lowerLine.indexOf(kw);
         if (pos === -1) continue;
-        
-        // 关键词结束位置 + 剩余字符数
+
         const kwEnd = pos + kw.length;
         const tailLength = trimmed.length - kwEnd;
-        
-        // 关键词后面剩余内容很短 → 判定为签名行
+
         if (tailLength <= MAX_TAIL_CHARS) {
             return true;
         }
     }
     return false;
 }
-
-
-
 
 function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
     const result: Array<{ line: string; raw: string }> = [];
@@ -145,7 +138,6 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     console.debug('[splitMailBlocks] input length:', threadText.length);
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
-    let preBuffer: string[] = [];
     let currentBlock: string[] | null = null;
     let pendingStarterRaw: string | null = null;
 
@@ -163,10 +155,9 @@ function splitMailBlocks(threadText: string): MailBlock[] {
                 currentBlock.push(item.raw);
                 pendingStarterRaw = null;
             } else {
-                // 下一行无邮箱，不是引用头，恢复成普通文本
+                // 不是分割头，归入当前块
                 if (currentBlock === null) {
-                    preBuffer.push(pendingStarterRaw);
-                    preBuffer.push(item.raw);
+                    currentBlock = [pendingStarterRaw, item.raw];
                 } else {
                     currentBlock.push(pendingStarterRaw);
                     currentBlock.push(item.raw);
@@ -176,7 +167,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             continue;
         }
 
-        // ---------- 情况B：本行就是完整单行分割头(预处理成功) ----------
+        // ---------- 情况B：本行就是完整单行分割头 ----------
         if (isInlineMailStartLine(textLine)) {
             if (currentBlock !== null && currentBlock.length > 0) {
                 blocks.push(currentBlock);
@@ -193,16 +184,17 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 
         // ---------- 普通文本行 ----------
         if (currentBlock === null) {
-            preBuffer.push(item.raw);
+            // 兜底开启第一块（理论不会命中，线程首行必有分割标记）
+            currentBlock = [item.raw];
         } else {
             currentBlock.push(item.raw);
         }
     }
 
-    // 循环结束，残留未匹配的孤立starter，当做普通正文
+    // 循环结束，残留未匹配的孤立starter，归入当前邮件块
     if (pendingStarterRaw !== null) {
         if (currentBlock === null) {
-            preBuffer.push(pendingStarterRaw);
+            currentBlock = [pendingStarterRaw];
         } else {
             currentBlock.push(pendingStarterRaw);
         }
@@ -212,21 +204,18 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         blocks.push(currentBlock);
     }
 
-    const result: MailBlock[] = [];
-    const preStr = preBuffer.join('');
-    if (preStr.trim().length > 0) {
-        result.push({ type: 'prefix', text: preStr });
-    }
-    for (const b of blocks) {
-        const mailText = b.join('');
-        if (mailText.trim().length > 0) {
-            result.push({ type: 'mail', text: mailText });
-        }
-    }
+    // 组装结果，全部为 mail 块
+    const result: MailBlock[] = blocks
+        .map(b => b.join(''))
+        .filter(mailText => mailText.trim().length > 0)
+        .map(text => ({ type: 'mail', text }));
+
+    // 兜底：零分割标记，全文当做一封邮件
     if (result.length === 0 && threadText.trim().length > 0) {
-        console.debug('[splitMailBlocks] fallback‑all‑to‑prefix');
-        result.push({ type: 'prefix', text: threadText });
+        console.debug('[splitMailBlocks] fallback‑all‑to‑mail');
+        result.push({ type: 'mail', text: threadText });
     }
+
     console.debug('[splitMailBlocks] blocks count =', result.length);
     return result;
 }
@@ -234,12 +223,20 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
     if (blocks.length === 0) return bodytext;
-    const prefixBlocks = blocks.filter(b => b.type === 'prefix');
-    const mailBlocks = blocks.filter(b => b.type === 'mail');
     const safeKeep = Math.max(0, keepReplies);
     const takeCount = 1 + safeKeep;
-    const selectedMails = mailBlocks.slice(0, takeCount);
-    return [...prefixBlocks, ...selectedMails].map(b => b.text).join('');
+    const selectedMails = blocks.slice(0, takeCount);
+    return selectedMails.map(b => b.text).join('');
+}
+
+/**
+ * 压缩块内部多余空行：连续多行空白只保留一行空行
+ * @param text 单封邮件正文
+ * @returns 处理后文本
+ */
+function compressBlankLines(text: string): string {
+    // 匹配：换行 + 任意空白字符 + 一个或多个换行
+    return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
@@ -248,17 +245,15 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
     const cleaned: string[] = [];
 
     for (const block of blocks) {
-        if (block.type === 'prefix') {
-            cleaned.push(block.text);
-            continue;
-        }
         const rawLines = splitPreserveNewline(block.text);
         const outLines: string[] = [];
         let signatureHit = false;
+
         for (const item of rawLines) {
             if (signatureHit) continue;
             const line = item.line;
-            if(isInlineMailStartLine(line) || isLonelyStarterLine(line)){
+
+            if (isInlineMailStartLine(line) || isLonelyStarterLine(line)) {
                 outLines.push(item.raw);
                 continue;
             }
@@ -271,7 +266,11 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             }
             outLines.push(item.raw);
         }
-        cleaned.push(outLines.length ? outLines.join('') : block.text);
+
+        let blockContent = outLines.length ? outLines.join('') : block.text;
+        // ===== 每个邮件块处理完之后，清理内部冗余空行 =====
+        blockContent = compressBlankLines(blockContent);
+        cleaned.push(blockContent);
     }
 
     const finalResult = cleaned.join('');
