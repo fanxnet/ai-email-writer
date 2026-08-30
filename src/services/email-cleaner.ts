@@ -158,7 +158,7 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
             break;
         }
         const isCrLf = nlIndex > 0 && text[nlIndex - 1] === '\r';
-        const lineEnd = isCrLf ? nlIndex - 1 : nl;
+        const lineEnd = isCrLf ? nlIndex - 1 : nlIndex;
         const lineContent = text.slice(pos, lineEnd);
         const newlineStr = isCrLf ? '\r\n' : '\n';
         result.push({ line: lineContent, raw: lineContent + newlineStr });
