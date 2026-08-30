@@ -5,7 +5,7 @@ const THREAD_BLOCK_STARTERS = [
     'From:',
     'Von:',
     'De:',
-    '发件人：',
+    '发件人:',
     'Sender:',
     'Expéditeur :',
     'Remitente:',
@@ -25,7 +25,8 @@ const HEADER_REMOVE_LIST = [
     'Тема:', 'Кому:', 'Копия:', 'Отправлено:', 'Дата:',
     '件名：', '宛先：', 'Cc：', '送信日時：', '日付：',
     '제목:', '받는 사람:', '참조:', '보낸 시간:', '날짜:',
-    '主题：', '收件人：', '抄送：', '发送时间：', '日期：'
+    '主题：', '收件人：', '抄送：', '发送时间：', '日期：',
+    '主题:', '收件人:', '抄送:', '发送时间:', '日期:'
 ];
 const SIGNATURE_TRIGGERS = [
     'Regards',
@@ -59,6 +60,7 @@ const SIGNATURE_TRIGGERS = [
     '祝工作顺利',
     '祝万事如意'
 ];
+// 纯人名签名关键词单独管理，强制行首匹配
 const SIGNATURE_NAMES = [
     'Angelina Liu'
 ];
@@ -66,18 +68,11 @@ const SIGNATURE_NAMES = [
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
 const mailStartRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})`, 'i');
 
-// ==========修复1：通用头部正则构建，自动兼容全角/半角冒号、冒号前空格==========
-function buildHeaderRegex(items: string[]): RegExp {
-    const patterns = items.map(item => {
-        // 提取纯标签，去掉末尾的冒号和空格
-        const label = item.replace(/\s*[：:]\s*$/, '');
-        const escapedLabel = escapeRegExp(label);
-        // 标签 + 可选空格 + 全角/半角冒号
-        return `${escapedLabel}\\s*[：:]`;
-    });
-    return new RegExp(`^[\\s\\u00A0]*(${patterns.join('|')})`, 'i');
-}
-const extraHeaderRegex = buildHeaderRegex(HEADER_REMOVE_LIST);
+// Expéditeur兼容冒号前有无空格
+const extraHeaderRxItems = HEADER_REMOVE_LIST.filter(item => item !== 'Expéditeur :')
+    .map(s => escapeRegExp(s));
+extraHeaderRxItems.unshift('Expéditeur\\s*:');
+const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${extraHeaderRxItems.join('|')})`, 'i');
 
 type MailBlock = {
     type: 'mail';
@@ -90,7 +85,7 @@ function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
 }
 
-// 签名检测：Dear豁免 + 普通词前缀≤5 + 人名强制行首
+// ==========修复：签名检测优化==========
 function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
     const trimmed = line.trim();
@@ -100,13 +95,14 @@ function lineTriggerSignature(line: string): boolean {
     if (trimmed.includes('?')) return false;
 
     const lowerLine = trimmed.toLowerCase();
-    // Dear开头的称呼行直接豁免
+
+    // 修复1：Dear开头的称呼行直接豁免，不可能是签名
     if (lowerLine.startsWith('dear ')) return false;
 
     const MAX_PREFIX = 5;
     const MAX_TAIL_CHARS = 12;
 
-    // 普通问候语关键词
+    // 普通问候语关键词：前缀≤5字符
     for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();
         const pos = lowerLine.indexOf(kw);
@@ -119,7 +115,7 @@ function lineTriggerSignature(line: string): boolean {
         }
     }
 
-    // 人名类关键词强制行首匹配
+    // 修复2：人名类关键词强制行首匹配，杜绝正文称呼误触发
     for (const name of SIGNATURE_NAMES) {
         const nameLower = name.toLowerCase();
         if (lowerLine.startsWith(nameLower)) {
@@ -132,7 +128,7 @@ function lineTriggerSignature(line: string): boolean {
     return false;
 }
 
-// 通用横线判断
+// 通用横线判断：覆盖所有HR转文本字符
 function isHorizontalRuleLine(line: string): boolean {
     const trimmed = line.trim();
     if(trimmed.length < 5) return false;
@@ -167,7 +163,9 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
     return result;
 }
 
-// 前瞻邮箱校验
+/**
+ * 辅助函数：从当前下标往后看最多N行，检查是否包含邮箱尖括号 <
+ */
 function peekHasEmailBracket(lines:Array<{line:string,raw:string}>, currentIndex:number, lookAheadMax:number):boolean{
     for(let i = 0; i <= lookAheadMax; i++){
         const idx = currentIndex + i;
@@ -179,7 +177,7 @@ function peekHasEmailBracket(lines:Array<{line:string,raw:string}>, currentIndex
     return false;
 }
 
-// 分割阶段：From‑From + 3行前瞻校验
+// ===================== 分割阶段：From‑From + 3行前瞻邮箱校验 =====================
 function splitMailBlocks(threadText: string): MailBlock[] {
     console.debug('[splitMailBlocks] input length:', threadText.length);
     const rawLines = splitPreserveNewline(threadText);
@@ -191,23 +189,25 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         const item = rawLines[i];
         const textLine = item.line;
 
-        // 横线防御
+        // 优先级1：横线防御，直接归入当前块，跳过所有分割判断
         if (isHorizontalRuleLine(textLine)) {
             if (currentBlock === null) currentBlock = [];
             currentBlock.push(item.raw);
             continue;
         }
 
-        // 发件标记 + 前瞻邮箱校验
+        // 优先级2：命中发件标记，执行前瞻校验
         if (isMailStartLine(textLine)) {
             const isValidMailHeader = peekHasEmailBracket(rawLines, i, MAX_LOOK_AHEAD);
             if(isValidMailHeader){
+                // 真实线程分割头，新开块
                 if (currentBlock !== null && currentBlock.length > 0) {
                     blocks.push(currentBlock);
                 }
                 currentBlock = [item.raw];
                 continue;
             }else{
+                // 3行内无邮箱 → 判断为正文文字，不分割，加入当前块
                 if (currentBlock === null) {
                     currentBlock = [item.raw];
                 } else {
@@ -217,7 +217,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
             }
         }
 
-        // 普通内容行
+        // 普通内容行，直接加入当前邮件块
         if (currentBlock === null) {
             currentBlock = [item.raw];
         } else {
@@ -225,14 +225,16 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         }
     }
 
+    // 归档最后一封邮件
     if (currentBlock !== null && currentBlock.length > 0) {
         blocks.push(currentBlock);
     }
+    // 组装结果
     const result: MailBlock[] = blocks
         .map(b => b.join(''))
         .filter(mailText => mailText.trim().length > 0)
         .map(text => ({ type: 'mail', text }));
-
+    // 兜底：零分割标记，全文当做一封邮件
     if (result.length === 0 && threadText.trim().length > 0) {
         console.debug('[splitMailBlocks] fallback-all-to-mail');
         result.push({ type: 'mail', text: threadText });
@@ -249,79 +251,62 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
     const selectedMails = blocks.slice(0, takeCount);
     return selectedMails.map(b => b.text).join('');
 }
-
 function compressBlankLines(text: string): string {
     text = text.replace(/\u00A0/g, ' ');
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
+// ===================== 清理阶段：分割完成后，块内做过滤 =====================
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
     const cleaned: string[] = [];
+    const MAX_HEADER_LINES = 20;
 
     for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         const rawLines = splitPreserveNewline(block.text);
         const outLines: string[] = [];
-
-        let foundFrom = false;
-        let inHeaderZone = false;
-        let foundSubject = false;
+        let signatureHit = false;
+        let insideHeaderBlock = false;
+        let headerLineCount = 0;
 
         for (const item of rawLines) {
+            if (signatureHit) continue;
             const line = item.line;
 
-            // --- 签名截断逻辑，正文阶段生效 ---
-            if (removeSignature && !inHeaderZone && lineTriggerSignature(line)) {
-                break;
-            }
-
-            if (!foundFrom) {
-                // 还没找到From，继续扫描，遇到From开启头部区
-                if (isMailStartLine(line)) {
+            // 头部区块退出：空白行 / 横线 / 超过最大行数
+            if (insideHeaderBlock) {
+                headerLineCount++;
+                if (line.trim() === '' || isHorizontalRuleLine(line) || headerLineCount >= MAX_HEADER_LINES) {
+                    insideHeaderBlock = false;
+                    headerLineCount = 0;
                     outLines.push(item.raw);
-                    foundFrom = true;
-                    inHeaderZone = true;
-                } else {
-                    // From之前的前置内容，原样保留（极少数邮件正文在From前面）
-                    outLines.push(item.raw);
+                    continue;
                 }
                 continue;
             }
 
-            if (inHeaderZone) {
-                // 头部区间：From 之后 → Subject之前
-                if (isExtraHeaderLine(line)) {
-                    // 判断当前行是不是主题行
-                    if (/^\s*(Subject|Betreff|Objet|主题):/i.test(line)) {
-                        //命中主题，丢弃主题行，头部区结束，后面全部是正文
-                        foundSubject = true;
-                        inHeaderZone = false;
-                    }
-                    // 所有头部行(To/Cc/Date/Subject)一律丢弃
-                    continue;
-                }
-
-                // 当前行 不是头部标签 → 头部区间到此截止，改行以及后面全部放行正文
-                inHeaderZone = false;
+            // 发件人行保留
+            if (isMailStartLine(line)) {
                 outLines.push(item.raw);
                 continue;
             }
-
-            // 已经离开头部区：正文原样输出
+            // 命中其他头部字段，开启头部区块（整行丢弃，包括Subject:本身）
+            if (isExtraHeaderLine(line)) {
+                insideHeaderBlock = true;
+                headerLineCount = 1;
+                continue;
+            }
+            if (removeSignature && lineTriggerSignature(line)) {
+                signatureHit = true;
+                continue;
+            }
             outLines.push(item.raw);
         }
+        let blockContent = outLines.length ? outLines.join('') : block.text;
 
-        // 兜底防护，永远不会丢失整封邮件
-        let blockContent: string;
-        if (outLines.length > 0) {
-            blockContent = outLines.join('');
-        } else {
-            blockContent = block.text;
-        }
-
-        // 添加块分隔标记，第2块开始加序号标记
+        // 带序号分隔符
         if (i > 0) {
             const mailNumber = i + 1;
             const separator = `\n--MAIL SPLIT MARKER-- #${mailNumber}\n`;
@@ -331,9 +316,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         blockContent = compressBlankLines(blockContent);
         cleaned.push(blockContent);
     }
-
     const finalResult = cleaned.join('');
     return finalResult.length ? finalResult : bodytext;
 }
-
 
