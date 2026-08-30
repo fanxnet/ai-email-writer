@@ -63,11 +63,8 @@ const SIGNATURE_TRIGGERS = [
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
 
-// ==========分割核心修复1：单行完整分割头，标记后强制跟空格==========
-// 必须是 「标记 + 空格 + 内容」才判定为邮件头，避免短标记误匹配前缀
-const inlineStarterRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})\\s+`, 'i');
-// ==========分割核心修复2：孤立starter严格整行匹配，标记+空格+行尾==========
-const lonelyStarterRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})\\s*$`, 'i');
+// ==========核心简化：发件人行统一判断（行首命中标记即可，不区分单行/跨行）==========
+const mailStartRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})`, 'i');
 
 // Expéditeur兼容冒号前有无空格
 const extraHeaderRxItems = HEADER_REMOVE_LIST.filter(item => item !== 'Expéditeur :')
@@ -79,11 +76,9 @@ type MailBlock = {
     type: 'mail';
     text: string;
 };
-function isLonelyStarterLine(line: string): boolean {
-    return lonelyStarterRx.test(line);
-}
-function isInlineMailStartLine(line: string): boolean {
-    return inlineStarterRx.test(line) && line.includes('<');
+
+function isMailStartLine(line: string): boolean {
+    return mailStartRx.test(line);
 }
 function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
@@ -151,64 +146,35 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
     return result;
 }
 
-// ===================== 分割阶段：只做块切分，不做内容过滤 =====================
+// ===================== 分割阶段：极简逻辑，From到From就是一封邮件 =====================
 function splitMailBlocks(threadText: string): MailBlock[] {
     console.debug('[splitMailBlocks] input length:', threadText.length);
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
     let currentBlock: string[] | null = null;
-    let pendingStarterRaw: string | null = null;
 
     for (const item of rawLines) {
         const textLine = item.line;
 
-        // 横线防御：最优先判断，直接归入当前块，跳过所有分割检测
+        // 优先级1：横线防御，直接归入当前块，跳过所有分割判断
         if (isHorizontalRuleLine(textLine)) {
-            if (currentBlock === null) {
-                currentBlock = [item.raw];
-            } else {
-                currentBlock.push(item.raw);
-            }
-            pendingStarterRaw = null;
+            if (currentBlock === null) currentBlock = [];
+            currentBlock.push(item.raw);
             continue;
         }
 
-        // 情况A：上一行缓存了孤立starter
-        if (pendingStarterRaw !== null) {
-            if (textLine.includes('<')) {
-                if (currentBlock !== null && currentBlock.length > 0) {
-                    blocks.push(currentBlock);
-                }
-                currentBlock = [pendingStarterRaw, item.raw];
-                pendingStarterRaw = null;
-            } else {
-                if (currentBlock === null) {
-                    currentBlock = [pendingStarterRaw, item.raw];
-                } else {
-                    currentBlock.push(pendingStarterRaw);
-                    currentBlock.push(item.raw);
-                }
-                pendingStarterRaw = null;
-            }
-            continue;
-        }
-
-        // 情况B：本行是完整单行分割头（标记+空格+包含<）
-        if (isInlineMailStartLine(textLine)) {
+        // 优先级2：行首命中发件人标记 → 新邮件块开始
+        if (isMailStartLine(textLine)) {
+            // 归档上一封邮件
             if (currentBlock !== null && currentBlock.length > 0) {
                 blocks.push(currentBlock);
             }
+            // 开启新邮件，发件人行作为块首行
             currentBlock = [item.raw];
             continue;
         }
 
-        // 情况C：命中孤立starter行，缓存看下一行
-        if (isLonelyStarterLine(textLine)) {
-            pendingStarterRaw = item.raw;
-            continue;
-        }
-
-        // 普通文本行
+        // 普通内容行，直接加入当前邮件块
         if (currentBlock === null) {
             currentBlock = [item.raw];
         } else {
@@ -216,23 +182,18 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         }
     }
 
-    // 收尾：残留starter归入当前块
-    if (pendingStarterRaw !== null) {
-        if (currentBlock === null) {
-            currentBlock = [pendingStarterRaw];
-        } else {
-            currentBlock.push(pendingStarterRaw);
-        }
-    }
+    // 归档最后一封邮件
     if (currentBlock !== null && currentBlock.length > 0) {
         blocks.push(currentBlock);
     }
 
+    // 组装结果
     const result: MailBlock[] = blocks
         .map(b => b.join(''))
         .filter(mailText => mailText.trim().length > 0)
         .map(text => ({ type: 'mail', text }));
 
+    // 兜底：零分割标记，全文当做一封邮件
     if (result.length === 0 && threadText.trim().length > 0) {
         console.debug('[splitMailBlocks] fallback-all-to-mail');
         result.push({ type: 'mail', text: threadText });
@@ -255,7 +216,7 @@ function compressBlankLines(text: string): string {
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
-// ===================== 清理阶段：分割完成后，块内过滤 =====================
+// ===================== 清理阶段：分割完成后，块内做过滤 =====================
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
@@ -286,11 +247,12 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
                 continue;
             }
 
-            if (isInlineMailStartLine(line) || isLonelyStarterLine(line)) {
+            // 发件人行保留
+            if (isMailStartLine(line)) {
                 outLines.push(item.raw);
                 continue;
             }
-            // 命中头部字段，开启头部区块
+            // 命中其他头部字段，开启头部区块
             if (isExtraHeaderLine(line)) {
                 insideHeaderBlock = true;
                 headerLineCount = 1;
