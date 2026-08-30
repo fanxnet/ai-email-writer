@@ -6,7 +6,6 @@ const THREAD_BLOCK_STARTERS = [
     'Von:',
     'De:',
     '发件人：',
-    '发件人:',
     'Sender:',
     'Expéditeur :',
     'Remitente:',
@@ -62,11 +61,15 @@ const SIGNATURE_TRIGGERS = [
     'Angelina Liu'
 ];
 
-// ==========修复1:收紧孤立starter正则：冒号后必须带空白字符，不能De:就结束==========
 const lonelyStarterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})\\s+`, 'i');
-// 单行完整分割头：预处理合并成功，同一行同时有标记+邮箱
 const inlineStarterRx = new RegExp(`^[\\s\\u00A0]*(${THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|')})`, 'i');
-const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${HEADER_REMOVE_LIST.map(s=>escapeRegExp(s)).join('|')})`, 'i');
+
+//===== 加固：Expéditeur兼容冒号前有无空格 =====
+const extraHeaderRxItems = HEADER_REMOVE_LIST.filter(item => item !== 'Expéditeur :')
+    .map(s => escapeRegExp(s));
+extraHeaderRxItems.unshift('Expéditeur\\s*:');
+const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${extraHeaderRxItems.join('|')})`, 'i');
+
 type MailBlock = {
     type: 'mail';
     text: string;
@@ -81,7 +84,6 @@ function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
 }
 
-// ==========修复2:签名函数改为行首匹配，杜绝正文子串误命中==========
 function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
     const trimmed = line.trim();
@@ -93,7 +95,6 @@ function lineTriggerSignature(line: string): boolean {
     const MAX_TAIL_CHARS = 12;
     for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();
-        // 关键词必须在行首，禁止子串命中
         if (!lowerLine.startsWith(kw)) continue;
         const kwEnd = kw.length;
         const tailLength = trimmed.length - kwEnd;
@@ -107,6 +108,8 @@ function lineTriggerSignature(line: string): boolean {
 function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
     const result: Array<{ line: string; raw: string }> = [];
     if (text.length === 0) return result;
+    // NBSP不间断空格清理
+    text = text.replace(/\u00A0/g, ' ');
     let pos = 0;
     while (pos < text.length) {
         const nlIndex = text.indexOf('\n', pos);
@@ -135,7 +138,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         const textLine = item.line;
         const trimStartLine = textLine.trimStart();
 
-        // ==========修复3：横线防御规则：以横线开头的行直接跳过分割检测==========
+        //横线防御规则：以横线开头的行直接跳过分割检测
         if (trimStartLine.startsWith('-') || trimStartLine.startsWith('—')) {
             if (currentBlock === null) {
                 currentBlock = [item.raw];
@@ -157,7 +160,6 @@ function splitMailBlocks(threadText: string): MailBlock[] {
                 currentBlock.push(item.raw);
                 pendingStarterRaw = null;
             } else {
-                // 不是分割头，归入当前块
                 if (currentBlock === null) {
                     currentBlock = [pendingStarterRaw, item.raw];
                 } else {
@@ -183,7 +185,6 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         }
         // ---------- 普通文本行 ----------
         if (currentBlock === null) {
-            // 兜底开启第一块（理论不会命中，线程首行必有分割标记）
             currentBlock = [item.raw];
         } else {
             currentBlock.push(item.raw);
@@ -227,10 +228,11 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
  * @returns 处理后文本
  */
 function compressBlankLines(text: string): string {
+    // 二次兜底清理NBSP
+    text = text.replace(/\u00A0/g, ' ');
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
-// 邮件分隔标记，你可以随时修改
-const MAIL_SEPARATOR = "--MAIL SPLIT MARKER--";
+
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
@@ -257,12 +259,14 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
             outLines.push(item.raw);
         }
         let blockContent = outLines.length ? outLines.join('') : block.text;
-        // 第一步：先附加分隔符、尾部空行
+
+        //带序号分隔符
         if (i > 0) {
-            blockContent = `\n${MAIL_SEPARATOR} (${i})\n` + blockContent;
+            const mailNumber = i + 1;
+            const separator = `\n--MAIL SPLIT MARKER-- #${mailNumber}\n`;
+            blockContent = separator + blockContent;
         }
         blockContent += "\n";
-        // 第二步：再统一压缩所有多余空行
         blockContent = compressBlankLines(blockContent);
         cleaned.push(blockContent);
     }
