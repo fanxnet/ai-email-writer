@@ -171,7 +171,7 @@ export async function generateReply(
   });
 
   lastReplyOptions = { ...options };
-  lastReply = prompt;
+  lastReply = reply;
 
   // Record the exchange for local storage only (not injected into prompts)
   appendTurn(sessionKey, 'user', options.instructions);

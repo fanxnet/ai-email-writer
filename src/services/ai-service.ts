@@ -16,6 +16,7 @@ export async function generateText(prompt: string, options: any = {}): Promise<s
   }
   return geminiGenerateText(prompt, opts);
 */
+  return prompt
 }
 
 export async function generateJson<T>(prompt: string, options: any = {}): Promise<T> {
