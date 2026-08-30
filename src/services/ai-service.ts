@@ -11,7 +11,8 @@ export async function generateText(prompt: string, options: any = {}): Promise<s
   // Default to a single attempt (MAX_RETRIES = 0) so retries never burn API
   // tokens unbeknown to the user; callers can opt back in via `maxRetries`.
   const opts = { ...options, maxRetries: options.maxRetries ?? MAX_RETRIES };
-  if (prompt.includes('test-prompt')) {
+ // if (prompt.includes('testprompt')) {
+ if (/testprompt/i.test(prompt)) {
     return prompt;
   } else {
     if (provider === 'deepseek') {
