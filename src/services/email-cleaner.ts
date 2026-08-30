@@ -31,33 +31,30 @@ const HEADER_REMOVE_LIST = [
 ];
 
 const SIGNATURE_TRIGGERS = [
-    'Regards,',
-    'Best regards,',
-    'Kind regards,',
-    'Thanks,',
-    'Thank you,',
-    'Thank you very much,',
-    'Sincerely,',
-    'Best,',
-    'Cheers,',
+    'Regards',
+    'Thank',
+    'Thank you',
+    'Thank you very much',
+    'Sincerely',
+    'Wishes',
     'Mit freundlichen Grüßen',
     'Viele Grüße',
     'Liebe Grüße',
-    'Cordialement,',
-    'Bien à vous,',
-    'Merci,',
-    'Saludos,',
-    'Atentamente,',
-    'Muchas gracias,',
-    'Atenciosamente,',
-    'Saudações,',
-    'Obrigado,',
-    'Cordiali saluti,',
-    'Grazie,',
-    'С уважением,',
-    'Спасибо,',
-    'よろしくお願いいたします。',
-    '宜しくお願い致します。',
+    'Cordialement',
+    'Bien à vous',
+    'Merci',
+    'Saludos',
+    'Atentamente',
+    'Muchas gracias',
+    'Atenciosamente',
+    'Saudações',
+    'Obrigado',
+    'Cordiali saluti',
+    'Grazie',
+    'С уважением',
+    'Спасибо',
+    'よろしくお願いいたします',
+    '宜しくお願い致します',
     '감사합니다.',
     '顺颂商祺',
     '祝好',
@@ -92,9 +89,29 @@ function isExtraHeaderLine(line: string): boolean {
 }
 
 function lineTriggerSignature(line: string): boolean {
-    const lower = line.toLowerCase();
-    return SIGNATURE_TRIGGERS.some(keyword => lower.includes(keyword.toLowerCase()));
+    const trimmed = line.trim();
+    if (trimmed.length === 0) return false;
+    // 签名行最大允许长度，超过直接跳过（可微调70‑100）
+    const MAX_SIGNATURE_LINE = trimmed.length+20;
+    if(trimmed.length > MAX_SIGNATURE_LINE) return false;
+    // 问句排除：带问号的行，不判定为签名
+    if(trimmed.includes('?')) return false;
+
+    const lowerLine = trimmed.toLowerCase();
+
+    for(const keyword of SIGNATURE_TRIGGERS){
+        const kw = keyword.toLowerCase();
+        const pos = lowerLine.indexOf(kw);
+        if(pos === -1) continue;
+        // 关键词出现在行前60%区域
+        if(pos / MAX_SIGNATURE_LINE <= 0.6){
+            return true;
+        }
+    }
+    return false;
 }
+
+
 
 function splitPreserveNewline(text: string): Array<{ line: string; raw: string }> {
     const result: Array<{ line: string; raw: string }> = [];

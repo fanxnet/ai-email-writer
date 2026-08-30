@@ -135,7 +135,6 @@ export async function generateReply(
   // Both are truncated on the HTML structure, then cleaned message-by-message.
   const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
   const emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
-//  const emailBody = cleanThreadEmails(context.body ?? '', true);
   originalEmail += emailBody;
   originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
 
@@ -172,7 +171,7 @@ export async function generateReply(
   });
 
   lastReplyOptions = { ...options };
-  lastReply = reply;
+  lastReply = prompt;
 
   // Record the exchange for local storage only (not injected into prompts)
   appendTurn(sessionKey, 'user', options.instructions);
