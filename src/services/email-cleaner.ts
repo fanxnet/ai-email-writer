@@ -6,6 +6,7 @@ const THREAD_BLOCK_STARTERS = [
     'Von:',
     'De:',
     '发件人：',
+    '发件人:',
     'Sender:',
     'Expéditeur :',
     'Remitente:',
@@ -32,7 +33,7 @@ const SIGNATURE_TRIGGERS = [
     'Thanks',
     'Thank you',
     'Sincerely',
-    'Wishes', // 移除高误报词
+    'Wishes',
     'Mit freundlichen Grüßen',
     'Viele Grüße',
     'Liebe Grüße',
@@ -258,7 +259,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         let blockContent = outLines.length ? outLines.join('') : block.text;
         // 第一步：先附加分隔符、尾部空行
         if (i > 0) {
-            blockContent = `\n${MAIL_SEPARATOR}\n` + blockContent;
+            blockContent = `\n${MAIL_SEPARATOR} (${i})\n` + blockContent;
         }
         blockContent += "\n";
         // 第二步：再统一压缩所有多余空行
