@@ -255,65 +255,73 @@ function compressBlankLines(text: string): string {
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
-// ==========修复2：优化头部区块逻辑，精准清理不删正文==========
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
     const cleaned: string[] = [];
-    const MAX_HEADER_LINES = 20;
 
     for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         const rawLines = splitPreserveNewline(block.text);
         const outLines: string[] = [];
-        let signatureHit = false;
-        let insideHeaderBlock = false;
-        let headerLineCount = 0;
+
+        let foundFrom = false;
+        let inHeaderZone = false;
+        let foundSubject = false;
 
         for (const item of rawLines) {
-            if (signatureHit) continue;
             const line = item.line;
 
-            if (insideHeaderBlock) {
-                headerLineCount++;
-                // 强制退出：空行、横线、超最大行数
-                if (line.trim() === '' || isHorizontalRuleLine(line) || headerLineCount >= MAX_HEADER_LINES) {
-                    insideHeaderBlock = false;
-                    headerLineCount = 0;
+            // --- 签名截断逻辑，正文阶段生效 ---
+            if (removeSignature && !inHeaderZone && lineTriggerSignature(line)) {
+                break;
+            }
+
+            if (!foundFrom) {
+                // 还没找到From，继续扫描，遇到From开启头部区
+                if (isMailStartLine(line)) {
                     outLines.push(item.raw);
+                    foundFrom = true;
+                    inHeaderZone = true;
+                } else {
+                    // From之前的前置内容，原样保留（极少数邮件正文在From前面）
+                    outLines.push(item.raw);
+                }
+                continue;
+            }
+
+            if (inHeaderZone) {
+                // 头部区间：From 之后 → Subject之前
+                if (isExtraHeaderLine(line)) {
+                    // 判断当前行是不是主题行
+                    if (/^\s*(Subject|Betreff|Objet|主题):/i.test(line)) {
+                        //命中主题，丢弃主题行，头部区结束，后面全部是正文
+                        foundSubject = true;
+                        inHeaderZone = false;
+                    }
+                    // 所有头部行(To/Cc/Date/Subject)一律丢弃
                     continue;
                 }
-                // 仍在头部范围内：是头部标签 或 包含邮箱< → 继续删除
-                if (isExtraHeaderLine(line) || line.includes('<')) {
-                    continue;
-                }
-                // 其他情况：遇到正文，立刻退出，保留本行
-                insideHeaderBlock = false;
-                headerLineCount = 0;
+
+                // 当前行 不是头部标签 → 头部区间到此截止，改行以及后面全部放行正文
+                inHeaderZone = false;
                 outLines.push(item.raw);
                 continue;
             }
 
-            // 发件人行保留
-            if (isMailStartLine(line)) {
-                outLines.push(item.raw);
-                continue;
-            }
-            // 命中头部字段，开启头部区块，删除本行
-            if (isExtraHeaderLine(line)) {
-                insideHeaderBlock = true;
-                headerLineCount = 1;
-                continue;
-            }
-            if (removeSignature && lineTriggerSignature(line)) {
-                signatureHit = true;
-                continue;
-            }
+            // 已经离开头部区：正文原样输出
             outLines.push(item.raw);
         }
-        let blockContent = outLines.length ? outLines.join('') : block.text;
 
-        // 带序号分隔符
+        // 兜底防护，永远不会丢失整封邮件
+        let blockContent: string;
+        if (outLines.length > 0) {
+            blockContent = outLines.join('');
+        } else {
+            blockContent = block.text;
+        }
+
+        // 添加块分隔标记，第2块开始加序号标记
         if (i > 0) {
             const mailNumber = i + 1;
             const separator = `\n--MAIL SPLIT MARKER-- #${mailNumber}\n`;
@@ -323,7 +331,9 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         blockContent = compressBlankLines(blockContent);
         cleaned.push(blockContent);
     }
+
     const finalResult = cleaned.join('');
     return finalResult.length ? finalResult : bodytext;
 }
+
 
