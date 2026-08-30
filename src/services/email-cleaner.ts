@@ -32,9 +32,8 @@ const HEADER_REMOVE_LIST = [
 
 const SIGNATURE_TRIGGERS = [
     'Regards',
-    'Thank',
+    'Thanks',
     'Thank you',
-    'Thank you very much',
     'Sincerely',
     'Wishes',
     'Mit freundlichen Grüßen',
@@ -89,27 +88,35 @@ function isExtraHeaderLine(line: string): boolean {
 }
 
 function lineTriggerSignature(line: string): boolean {
+    if (!line) return false;
     const trimmed = line.trim();
     if (trimmed.length === 0) return false;
-    // 签名行最大允许长度，超过直接跳过（可微调70‑100）
-    const MAX_SIGNATURE_LINE = trimmed.length+20;
-    if(trimmed.length > MAX_SIGNATURE_LINE) return false;
-    // 问句排除：带问号的行，不判定为签名
-    if(trimmed.includes('?')) return false;
+
+    const MAX_SIGNATURE_LINE = 30;
+    if (trimmed.length > MAX_SIGNATURE_LINE) return false;
+    if (trimmed.includes('?')) return false;
 
     const lowerLine = trimmed.toLowerCase();
+    // 关键词结束后，允许剩余的最大字符数（标点+空格+短署名）
+    const MAX_TAIL_CHARS = 12;
 
-    for(const keyword of SIGNATURE_TRIGGERS){
+    for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();
         const pos = lowerLine.indexOf(kw);
-        if(pos === -1) continue;
-        // 关键词出现在行前60%区域
-        if(pos / MAX_SIGNATURE_LINE <= 0.6){
+        if (pos === -1) continue;
+        
+        // 关键词结束位置 + 剩余字符数
+        const kwEnd = pos + kw.length;
+        const tailLength = trimmed.length - kwEnd;
+        
+        // 关键词后面剩余内容很短 → 判定为签名行
+        if (tailLength <= MAX_TAIL_CHARS) {
             return true;
         }
     }
     return false;
 }
+
 
 
 
