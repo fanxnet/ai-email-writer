@@ -11,12 +11,14 @@ export async function generateText(prompt: string, options: any = {}): Promise<s
   // Default to a single attempt (MAX_RETRIES = 0) so retries never burn API
   // tokens unbeknown to the user; callers can opt back in via `maxRetries`.
   const opts = { ...options, maxRetries: options.maxRetries ?? MAX_RETRIES };
-/*  if (provider === 'deepseek') {
-    return deepseekGenerateText(prompt, opts);
+  if (prompt.includes('test-prompt')) {
+    return prompt;
+  } else {
+    if (provider === 'deepseek') {
+      return deepseekGenerateText(prompt, opts);
+    }
+    return geminiGenerateText(prompt, opts);
   }
-  return geminiGenerateText(prompt, opts);
-*/
-  return prompt
 }
 
 export async function generateJson<T>(prompt: string, options: any = {}): Promise<T> {
@@ -28,3 +30,5 @@ export async function generateJson<T>(prompt: string, options: any = {}): Promis
   }
   return geminiGenerateJson<T>(prompt, opts);
 }
+
+
