@@ -1,11 +1,16 @@
 function escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/**
+ * 邮件线程分割起始标记 - 【永远保留，不能删除】
+ */
 const THREAD_BLOCK_STARTERS = [
     'From:',
     'Von:',
     'De:',
     '发件人：',
+    '发件人:',
     'Sender:',
     'Expéditeur :',
     'Remitente:',
@@ -15,6 +20,10 @@ const THREAD_BLOCK_STARTERS = [
     '差出人：',
     '보낸 사람:'
 ];
+
+/**
+ * 需要过滤删除的邮件头部词根（不含From/发件人！！）
+ */
 const HEADER_REMOVE_LIST = [
     'Subject', 'To', 'Cc', 'Sent', 'Date',
     'Betreff', 'An', 'Kopie', 'Gesendet', 'Datum',
@@ -27,6 +36,7 @@ const HEADER_REMOVE_LIST = [
     '제목', '받는 사람', '참조', '보낸 시간', '날짜',
     '主题', '收件人', '抄送', '发送时间', '日期'
 ];
+
 const SIGNATURE_TRIGGERS = [
     'Regards',
     'Thanks',
@@ -63,28 +73,28 @@ const SIGNATURE_NAMES = [
     'Angelina Liu'
 ];
 
-const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
+const starterKeywords = THREAD_BLOCK_STARTERS.map(s => escapeRegExp(s)).join('|');
 const mailStartRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})`, 'i');
 
-// ============【关键修复】头部正则兼容半角: 全角：============
+// 生成头部删除正则，兼容半角/全角冒号
 const extraHeaderRxItems: string[] = [];
-for(const raw of HEADER_REMOVE_LIST){
+for (const raw of HEADER_REMOVE_LIST) {
     const escaped = escapeRegExp(raw.trim());
-    // 允许关键词后面: 半角冒号、全角冒号、冒号前后带空格
     extraHeaderRxItems.push(`${escaped}\\s*[:：]`);
 }
-// 额外单独加入 Expéditeur :
 extraHeaderRxItems.push('Expéditeur\\s*:');
-
 const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${extraHeaderRxItems.join('|')})`, 'i');
+
 
 type MailBlock = {
     type: 'mail';
     text: string;
 };
+
 function isMailStartLine(line: string): boolean {
     return mailStartRx.test(line);
 }
+
 function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
 }
@@ -107,7 +117,7 @@ function lineTriggerSignature(line: string): boolean {
         const kw = keyword.toLowerCase();
         const pos = lowerLine.indexOf(kw);
         if (pos === -1) continue;
-        if(pos > MAX_PREFIX) continue;
+        if (pos > MAX_PREFIX) continue;
         const kwEnd = pos + kw.length;
         const tailLength = trimmed.length - kwEnd;
         if (tailLength <= MAX_TAIL_CHARS) {
@@ -129,12 +139,12 @@ function lineTriggerSignature(line: string): boolean {
 
 function isHorizontalRuleLine(line: string): boolean {
     const trimmed = line.trim();
-    if(trimmed.length < 5) return false;
+    if (trimmed.length < 5) return false;
     const firstChar = trimmed[0];
-    if(!['-','=','_','—','―','~'].includes(firstChar)) return false;
+    if (!['-', '=', '_', '—', '―', '~'].includes(firstChar)) return false;
     let sameCount = 0;
-    for(const ch of trimmed){
-        if(ch === firstChar) sameCount++;
+    for (const ch of trimmed) {
+        if (ch === firstChar) sameCount++;
     }
     return sameCount / trimmed.length >= 0.9;
 }
@@ -161,11 +171,11 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
     return result;
 }
 
-function peekHasEmailBracket(lines:Array<{line:string,raw:string}>, currentIndex:number, lookAheadMax:number):boolean{
-    for(let i = 0; i <= lookAheadMax; i++){
+function peekHasEmailBracket(lines: Array<{ line: string; raw: string }>, currentIndex: number, lookAheadMax: number): boolean {
+    for (let i = 0; i <= lookAheadMax; i++) {
         const idx = currentIndex + i;
-        if(idx >= lines.length) break;
-        if(lines[idx].line.includes('<')){
+        if (idx >= lines.length) break;
+        if (lines[idx].line.includes('<')) {
             return true;
         }
     }
@@ -191,13 +201,13 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 
         if (isMailStartLine(textLine)) {
             const isValidMailHeader = peekHasEmailBracket(rawLines, i, MAX_LOOK_AHEAD);
-            if(isValidMailHeader){
+            if (isValidMailHeader) {
                 if (currentBlock !== null && currentBlock.length > 0) {
                     blocks.push(currentBlock);
                 }
                 currentBlock = [item.raw];
                 continue;
-            }else{
+            } else {
                 if (currentBlock === null) {
                     currentBlock = [item.raw];
                 } else {
@@ -221,6 +231,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         .map(b => b.join(''))
         .filter(mailText => mailText.trim().length > 0)
         .map(text => ({ type: 'mail', text }));
+
     if (result.length === 0 && threadText.trim().length > 0) {
         console.debug('[splitMailBlocks] fallback-all-to-mail');
         result.push({ type: 'mail', text: threadText });
@@ -229,22 +240,22 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     return result;
 }
 
-export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
-    const blocks = splitMailBlocks(bodytext);
-    if (blocks.length === 0) return bodytext;
-    const safeKeep = Math.max(0, keepReplies);
-    const takeCount = 1 + safeKeep;
-    const selectedMails = blocks.slice(0, takeCount);
+export function buildThreadBodyText(bodyText: string, keepReplies: number): string {
+    const blocks = splitMailBlocks(bodyText);
+    if (blocks.length === 0) return bodyText;
+    const safeKeep = Math.max(1, keepReplies);
+    const selectedMails = blocks.slice(0, safeKeep);
     return selectedMails.map(b => b.text).join('');
 }
+
 function compressBlankLines(text: string): string {
     text = text.replace(/\u00A0/g, ' ');
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
-export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
-    if (!bodytext) return bodytext;
-    const blocks = splitMailBlocks(bodytext);
+export function cleanThreadEmails(bodyText: string, removeSignature = true): string {
+    if (!bodyText) return bodyText;
+    const blocks = splitMailBlocks(bodyText);
     const cleaned: string[] = [];
     const MAX_HEADER_LINES = 20;
 
@@ -266,26 +277,32 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
                     insideHeaderBlock = false;
                     headerLineCount = 0;
                     outLines.push(item.raw);
-                    continue;
                 }
+                // 头部附属行直接丢弃，不push
                 continue;
             }
 
+            // 发件人From行：强制保留，永远不会进头部丢弃区
             if (isMailStartLine(line)) {
                 outLines.push(item.raw);
                 continue;
             }
+
+            // 命中待删头部标记，开启丢弃模式；当前行本身丢弃
             if (isExtraHeaderLine(line)) {
                 insideHeaderBlock = true;
                 headerLineCount = 1;
                 continue;
             }
+
             if (removeSignature && lineTriggerSignature(line)) {
                 signatureHit = true;
                 continue;
             }
+
             outLines.push(item.raw);
         }
+
         let blockContent = outLines.length ? outLines.join('') : block.text;
 
         if (i > 0) {
@@ -298,6 +315,6 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         cleaned.push(blockContent);
     }
     const finalResult = cleaned.join('');
-    return finalResult.length ? finalResult : bodytext;
+    return finalResult.length ? finalResult : bodyText;
 }
 
