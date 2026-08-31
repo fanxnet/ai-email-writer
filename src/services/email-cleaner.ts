@@ -97,7 +97,7 @@ function lineTriggerSignature(line: string): boolean {
     const lowerLine = trimmed.toLowerCase();
     if (lowerLine.startsWith('dear ')) return false;
 
-    const MAX_PREFIX = 5;
+    const MAX_PREFIX = 6;
     const MAX_TAIL_CHARS = 12;
 
     for (const keyword of SIGNATURE_TRIGGERS) {
