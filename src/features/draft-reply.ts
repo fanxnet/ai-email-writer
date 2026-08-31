@@ -126,8 +126,8 @@ export async function generateReply(
   const sessionKey = getSessionKey();
 
   // Build the original email string for the prompt (pre-truncated for safety)
-  let originalEmail = `From: ${context.sender.name} <${context.sender.email}>\n`;
-  originalEmail += `Subject: ${context.subject}\n\n`;
+  let originalEmail = `Subject: ${context.subject}\n\n`;
+  originalEmail += `--MAIL SPLIT MARKER-- the lastest\nFrom: ${context.sender.name} <${context.sender.email}>\n`;
 
   // Resolve the body to include based on the Thread toggle:
   // - Thread off (default): keep the current email plus the newest 2 replies.
