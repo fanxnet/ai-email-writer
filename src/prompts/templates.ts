@@ -56,6 +56,8 @@ Address the reply to: {{REPLY_TO_NAME}}
 {{RULES}}
 
 [2.Original Email]
+
+--MAIL SPLIT MARKER-- the lastest
 {{ORIGINAL_EMAIL}}
 
 [3.Reply Instructions(strictly)]

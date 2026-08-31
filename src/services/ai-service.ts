@@ -26,7 +26,7 @@ export async function generateJson<T>(prompt: string, options: any = {}): Promis
   const provider = getSetting('aiProvider') || 'gemini';
   // See generateText(): single attempt by default.
   const opts = { ...options, maxRetries: options.maxRetries ?? MAX_RETRIES };
-  if (/testprompt/i.test(prompt)) {
+  if (/prompt-test/i.test(prompt)) {
       return prompt;
   } 
   else if (provider === 'deepseek') { 

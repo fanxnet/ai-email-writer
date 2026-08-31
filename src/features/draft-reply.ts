@@ -135,10 +135,10 @@ export async function generateReply(
   // Both are truncated on the HTML structure, then cleaned message-by-message.
   const KEEP_REPLIES = options.includeThread ? MAX_KEEP_REPLIES : MIN_KEEP_REPLIES;
   let emailBody: string;
-  if (/testbuildThreadBodyText/i.test(options.instructions)) {
+  if (/buildThreadBodyText-test/i.test(options.instructions)) {
   emailBody = buildThreadBodyText(context.body ?? '', KEEP_REPLIES);
   } 
-  else if (/testemailHtmlToText/i.test(options.instructions)) { 
+  else if (/emailHtmlToText-test/i.test(options.instructions)) { 
   emailBody = context.body ?? '' ;
   }
   else { 
