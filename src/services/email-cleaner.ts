@@ -34,6 +34,7 @@ const SIGNATURE_TRIGGERS = [
     'Thank you',
     'Sincerely',
     'Wishes',
+    'Tks',
     'Tks & B rgds',
     'Tks n rgds',
     'Mit freundlichen Grüßen',
@@ -92,7 +93,7 @@ function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
     const trimmed = line.trim();
     if (trimmed.length === 0) return false;
-    const MAX_SIGNATURE_LINE = 30;
+    const MAX_SIGNATURE_LINE = 80;
     if (trimmed.length > MAX_SIGNATURE_LINE) return false;
     if (trimmed.includes('?')) return false;
 
