@@ -50,7 +50,7 @@ Role:As a professional email assistant,{{PROFILE}}
 Tone: {{TONE}}
 Language：{{LANGUAGE}}
 Address the reply to: {{REPLY_TO_NAME}} 
-- Write only the reply body (without subject,regards and signature).
+- Write the relpy body without subject.
 - Reference relevant points from the original email naturally.
 - Keep the reply focused and professional,no commentary outside the reply.
 {{RULES}}
@@ -63,7 +63,7 @@ Address the reply to: {{REPLY_TO_NAME}}
 {{REPLY_INSTRUCTIONS}}
 
 [4.Execution Instructions]
-请参考原始邮件内容,遵循基本要求(除非回复说明中另有明确要求),重点围绕回复说明,起草回复.`;
+请参考原始邮件内容,遵循基本要求(除非回复说明中另有明确要求),重点围绕回复说明,输出回复.`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread

@@ -253,7 +253,7 @@ const PRESET_RULE_LABELS: Record<string, string> = {
   noPlaceholders:
     'Do not include placeholder like [Your Name], [Company], or [Recipient]',
   noSignature:
-    'Do not add a sign-off or signature (e.g. "Best regards", "Kind regards", "Sincerely")',
+    'Do not add a sign-off or signature (e.g. "Regards", "Sincerely")',
   noSubjectLine:
     "Do not include a subject line in the output",
   keepShort:
