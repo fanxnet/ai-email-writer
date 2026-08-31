@@ -34,6 +34,7 @@ const SIGNATURE_TRIGGERS = [
     'Thank you',
     'Sincerely',
     'Wishes',
+    'Tks & B rgds',
     'Mit freundlichen Grüßen',
     'Viele Grüße',
     'Liebe Grüße',
@@ -98,7 +99,7 @@ function lineTriggerSignature(line: string): boolean {
     if (lowerLine.startsWith('dear ')) return false;
 
     const MAX_PREFIX = 6;
-    const MAX_TAIL_CHARS = 12;
+    const MAX_TAIL_CHARS = 8;
 
     for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();

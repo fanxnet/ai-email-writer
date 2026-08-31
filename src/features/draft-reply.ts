@@ -140,7 +140,7 @@ export async function generateReply(
   } 
   else if (/buildThreadBodyText-2x/i.test(options.instructions)) { 
   //for test
-  emailBody = buildThreadBodyText(context.body ?? '', 2*KEEP_REPLIES);
+  emailBody = context.body ?? '';
   }
   else { 
   emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
