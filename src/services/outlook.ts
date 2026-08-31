@@ -96,7 +96,6 @@ export function emailHtmlToText (
   const { stripQuoted = false, fixSplitMailHeaders = true } = options;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-
   // 递归删除HTML注释
   const removeComments = (root: Node) => {
     const nodes = Array.from(root.childNodes);
@@ -109,10 +108,8 @@ export function emailHtmlToText (
     }
   };
   removeComments(doc.body);
-
   // 移除脚本、样式，不属于邮件正文
   doc.querySelectorAll('style,script,noscript').forEach(el => el.remove());
-
   // 仅开启stripQuoted时才删除引用；默认所有历史邮件完整保留
   if (stripQuoted) {
     const quoteSelectors = [
@@ -129,7 +126,6 @@ export function emailHtmlToText (
       doc.querySelectorAll(sel).forEach(el => el.remove());
     });
   }
-
   // 列表项添加项目符号
   doc.querySelectorAll('li').forEach(li => {
     if (!li.textContent?.startsWith('• ')) {
@@ -137,26 +133,21 @@ export function emailHtmlToText (
       li.insertBefore(textNode, li.firstChild);
     }
   });
-
   // innerText还原布局换行，表格、复杂邮件布局不会丢内容
   let text = doc.body.innerText;
-
   // 强制清理Emoji表情包（永久生效）
   const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}]/gu;
   text = text.replace(emojiRegex, '');
-
   // ===== 统一清洗特殊空白、隐形字符 =====
   // Outlook零宽隐形字符，解决换行错乱,不间断空格 &nbsp;
   const zeroWidthChars = /[\u2000-\u200F\u2028-\u202F\u00A0]/g;
   text = text.replace(zeroWidthChars, ' ');
-
   // 规整多余空格和空行
   text = text
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-
-  // --------------------新增：合并跨行断裂邮件头--------------------
+  // --------------------新增：合并跨行断裂邮件头 + 线程换行修复--------------------
   if(fixSplitMailHeaders){
     const starters = ['From:','De:','Von:','发件人：','Sender:','Expéditeur :','Remitente:','Remetente:'];
     const escapeRegExp = (s:string)=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -166,10 +157,19 @@ export function emailHtmlToText (
         'gim'
     );
     text = text.replace(rx, '$1 ');
+
+    // 【新增1】多语种Outlook回复分界标记前强制补换行 (escribió:/wrote:/schrieb:/a écrit:)
+    const quoteMarkerRx = /(\s)(escribió:|wrote:|schrieb:|a écrit:)/gi;
+    text = text.replace(quoteMarkerRx, '\n\n$2');
+
+    // 【新增2】新From/发件人标记前面缺少换行，补上换行，防止邮件块粘连
+    text = text.replace(/([^\n])(From:|发件人：|发件人:|Von:|De:)/gi,'$1\n\n$2');
+
+    // 【新增3】头部字段粘连修复 Date / Subject / To / 主题 紧贴在前一行尾部
+    text = text.replace(/([^\n\s])(Date:|Subject:|To:|Sent:|主题：|主题:|发送时间：)/gi,'$1\n$2');
   }
   return text;
 }
-
 
 /**
  * Read the body of the currently open email as plain text.
