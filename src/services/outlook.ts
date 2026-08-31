@@ -145,8 +145,9 @@ export function emailHtmlToText (
   const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}]/gu;
   text = text.replace(emojiRegex, '');
 
-  // 清除Outlook零宽隐形字符，解决换行错乱
-  const zeroWidthChars = /[\u2000-\u200F\u2028-\u202F]/g;
+  // ===== 统一清洗特殊空白、隐形字符 =====
+  // Outlook零宽隐形字符，解决换行错乱,不间断空格 &nbsp;
+  const zeroWidthChars = /[\u2000-\u200F\u2028-\u202F\u00A0]/g;
   text = text.replace(zeroWidthChars, ' ');
 
   // 规整多余空格和空行
@@ -166,7 +167,6 @@ export function emailHtmlToText (
     );
     text = text.replace(rx, '$1 ');
   }
-
   return text;
 }
 

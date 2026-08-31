@@ -235,7 +235,6 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
 }
 
 function compressBlankLines(text: string): string {
-    text = text.replace(/\u00A0/g, ' ');
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
