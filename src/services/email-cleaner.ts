@@ -35,6 +35,7 @@ const SIGNATURE_TRIGGERS = [
     'Sincerely',
     'Wishes',
     'Tks & B rgds',
+    'Tks n rgds',
     'Mit freundlichen Grüßen',
     'Viele Grüße',
     'Liebe Grüße',
@@ -97,7 +98,12 @@ function lineTriggerSignature(line: string): boolean {
 
     const lowerLine = trimmed.toLowerCase();
     if (lowerLine.startsWith('dear ')) return false;
-
+// --------------------多语种斜杠复合签名，长关键词优先--------------------
+    const multiSaluteRx = /(mit freundlichen grüßen|atencionalmente|best regards|cordialement|sincerely|saludos)\s*\/\s*/i;
+    if(multiSaluteRx.test(lowerLine)){
+        return true;
+    }
+    
     const MAX_PREFIX = 6;
     const MAX_TAIL_CHARS = 8;
 
