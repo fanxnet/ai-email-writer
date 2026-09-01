@@ -66,7 +66,6 @@ const SIGNATURE_TRIGGERS = [
     'Tks & B rgds',
     'Tks n rgds',
     'BRgds',
-    
 ];
 
 const SIGNATURE_NAMES = [
@@ -102,16 +101,23 @@ function escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// 长词优先，保留原始大小写；/i 负责忽略大小写匹配
+// 不排序；/i 负责忽略大小写匹配
 const salutePattern = SIGNATURE_TRIGGERS
     .map(escapeRegExp)
     .join('|');
+/*// 长词优先排序，防止短词抢先匹配长词组
+const salutePattern = [...SIGNATURE_TRIGGERS]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join('|');
+*/
 
-// 移除 \b 单词边界！解决葡萄牙语、德语重音字符匹配失败
+// 关键修复：移除末尾 $ 行尾锚点！
+// 只要存在一对 关键词 / 关键词，后面还可以有更多链式内容
 const multiSaluteRx = new RegExp(
-    `(${salutePattern})\\s*(?:\\/|&)\\s*(${salutePattern})\\s*[,.!~;]?$`,
+    `(${salutePattern})\\s*(?:\\/|&)\\s*(${salutePattern})\\s*[,.!~;]*`,
     'i'
-    );
+);
 
 function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
