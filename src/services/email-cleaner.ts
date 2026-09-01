@@ -27,25 +27,27 @@ const HEADER_REMOVE_LIST = [
     'Enviada em:'
 ];
 const SIGNATURE_TRIGGERS = [
-    'Regards',
     'Best regards',
     'Kind regards',
+    'Regards',
+    'Best Wishes',
+    'Wishes',
     'Thanks',
     'Thank you',
-    'Tks',
     'Sincerely',
-    'Wishes',
-    'Best Wishes',
     'Mit freundlichen Grüßen',
+    'Saludos',
+    'Saludos cordiales',
+    'Atentamente',
+    'Atenciosamente',
+    'atencionalmente',
+    'Salutos',
     'Viele Grüße',
     'Liebe Grüße',
     'Cordialement',
     'Bien à vous',
     'Merci',
-    'Saludos',
-    'Atentamente',
     'Muchas gracias',
-    'Atenciosamente',
     'Saudações',
     'Obrigado',
     'Cordiali saluti',
@@ -59,13 +61,19 @@ const SIGNATURE_TRIGGERS = [
     '祝好',
     '此致',
     '敬礼',
+    'Tks',
+    'Tks and B. Rgds',
     'Tks & B rgds',
     'Tks n rgds',
-    'Saludos cordiales',
+    'BRgds',
+    
 ];
+
 const SIGNATURE_NAMES = [
     'Angelina Liu',
-    'Excited to work on this'
+    'Excited to work on this',
+    'Thank you so much,
+    'Thank you very much,
 ];
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
@@ -117,7 +125,7 @@ function lineTriggerSignature(line: string): boolean {
     const lowerLine = trimmed.toLowerCase();
     if (lowerLine.startsWith('dear ')) return false;
 
-    const MAX_PREFIX = 6;
+    const MAX_PREFIX = 2;
     const MAX_TAIL_CHARS = 8;
 
     // 1.普通单行问候关键词检测
@@ -143,7 +151,7 @@ function lineTriggerSignature(line: string): boolean {
         const nameLower = name.toLowerCase();
         if (lowerLine.startsWith(nameLower)) {
             const tailLength = trimmed.length - nameLower.length;
-            if (tailLength <= MAX_TAIL_CHARS) {
+            if (tailLength <= 2) {
                 return true;
             }
         }
