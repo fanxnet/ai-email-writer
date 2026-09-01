@@ -26,7 +26,8 @@ const HEADER_REMOVE_LIST = [
     'Тема:', 'Кому:', 'Копия:', 'Отправлено:', 'Дата:',
     '件名：', '宛先：', 'Cc：', '送信日時：', '日付：',
     '제목:', '받는 사람:', '참조:', '보낸 시간:', '날짜:',
-    '主题：', '主题:', '收件人：', '收件人:', '抄送：', '抄送:', '发送时间：', '发送时间:', '日期：', '日期:'
+    '主题：', '主题:', '收件人：', '收件人:', '抄送：', '抄送:', '发送时间：', '发送时间:', '日期：', '日期:',
+    'Enviada em:'
 ];
 const SIGNATURE_TRIGGERS = [
     'Regards',
@@ -61,7 +62,8 @@ const SIGNATURE_TRIGGERS = [
     '此致',
     '敬礼',
     '祝工作顺利',
-    '祝万事如意'
+    '祝万事如意',
+    'Excited to work on this'
 ];
 const SIGNATURE_NAMES = [
     'Angelina Liu'
@@ -99,11 +101,12 @@ function lineTriggerSignature(line: string): boolean {
 
     const lowerLine = trimmed.toLowerCase();
     if (lowerLine.startsWith('dear ')) return false;
-// --------------------多语种斜杠复合签名，长关键词优先--------------------
-    const multiSaluteRx = /(mit freundlichen grüßen|atencionalmente|best regards|cordialement|sincerely|saludos)\s*\/\s*/i;
+// --------------------多语种斜杠/&复合签名，长关键词优先--------------------
+    const multiSaluteRx = /(mit freundlichen grüßen|atencionalmente|best regards|cordialement|sincerely|saludos)\s*(?:\/|&|,)\s*/i;
     if(multiSaluteRx.test(lowerLine)){
-        return true;
-    }
+    return true;
+}
+
     
     const MAX_PREFIX = 6;
     const MAX_TAIL_CHARS = 8;
