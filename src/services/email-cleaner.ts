@@ -72,8 +72,8 @@ const SIGNATURE_TRIGGERS = [
 const SIGNATURE_NAMES = [
     'Angelina Liu',
     'Excited to work on this',
-    'Thank you so much,
-    'Thank you very much,
+    'Thank you so much',
+    'Thank you very much',
 ];
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
@@ -151,7 +151,7 @@ function lineTriggerSignature(line: string): boolean {
         const nameLower = name.toLowerCase();
         if (lowerLine.startsWith(nameLower)) {
             const tailLength = trimmed.length - nameLower.length;
-            if (tailLength <= 2) {
+            if (tailLength <= 6) {
                 return true;
             }
         }
