@@ -1,6 +1,3 @@
-function escapeRegExp(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 const THREAD_BLOCK_STARTERS = [
     'From:',
     'Von:',
@@ -31,13 +28,14 @@ const HEADER_REMOVE_LIST = [
 ];
 const SIGNATURE_TRIGGERS = [
     'Regards',
+    'Best regards',
+    'Kind regards',
     'Thanks',
     'Thank you',
+    'Tks',
     'Sincerely',
     'Wishes',
-    'Tks',
-    'Tks & B rgds',
-    'Tks n rgds',
+    'Best Wishes',
     'Mit freundlichen Grüßen',
     'Viele Grüße',
     'Liebe Grüße',
@@ -61,12 +59,13 @@ const SIGNATURE_TRIGGERS = [
     '祝好',
     '此致',
     '敬礼',
-    '祝工作顺利',
-    '祝万事如意',
-    'Excited to work on this'
+    'Tks & B rgds',
+    'Tks n rgds',
+    'Saludos cordiales',
 ];
 const SIGNATURE_NAMES = [
-    'Angelina Liu'
+    'Angelina Liu',
+    'Excited to work on this'
 ];
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
@@ -91,37 +90,55 @@ function isExtraHeaderLine(line: string): boolean {
     return extraHeaderRegex.test(line);
 }
 
+function escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 长词优先，保留原始大小写；/i 负责忽略大小写匹配
+const salutePattern = SIGNATURE_TRIGGERS
+    .map(escapeRegExp)
+    .join('|');
+
+// 移除 \b 单词边界！解决葡萄牙语、德语重音字符匹配失败
+const multiSaluteRx = new RegExp(
+    `(${salutePattern})\\s*(?:\\/|&)\\s*(${salutePattern})\\s*[,.!~;]?$`,
+    'i'
+    );
+
 function lineTriggerSignature(line: string): boolean {
     if (!line) return false;
     const trimmed = line.trim();
     if (trimmed.length === 0) return false;
+
     const MAX_SIGNATURE_LINE = 80;
     if (trimmed.length > MAX_SIGNATURE_LINE) return false;
     if (trimmed.includes('?')) return false;
 
     const lowerLine = trimmed.toLowerCase();
     if (lowerLine.startsWith('dear ')) return false;
-// --------------------多语种斜杠/&复合签名，长关键词优先--------------------
-    const multiSaluteRx = /(mit freundlichen grüßen|atencionalmente|best regards|cordialement|sincerely|saludos)\s*(?:\/|&|,)\s*/i;
-    if(multiSaluteRx.test(lowerLine)){
-    return true;
-}
 
-    
     const MAX_PREFIX = 6;
     const MAX_TAIL_CHARS = 8;
 
+    // 1.普通单行问候关键词检测
     for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();
         const pos = lowerLine.indexOf(kw);
         if (pos === -1) continue;
-        if(pos > MAX_PREFIX) continue;
+        if (pos > MAX_PREFIX) continue;
         const kwEnd = pos + kw.length;
         const tailLength = trimmed.length - kwEnd;
         if (tailLength <= MAX_TAIL_CHARS) {
             return true;
         }
     }
+
+    // 2.复合链式签名：2个关键词由 / 或 & 隔开即命中
+    if (multiSaluteRx.test(lowerLine)) {
+        return true;
+    }
+
+    // 3.人名签名：严格行首匹配
     for (const name of SIGNATURE_NAMES) {
         const nameLower = name.toLowerCase();
         if (lowerLine.startsWith(nameLower)) {
@@ -131,6 +148,7 @@ function lineTriggerSignature(line: string): boolean {
             }
         }
     }
+
     return false;
 }
 
