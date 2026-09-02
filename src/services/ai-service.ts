@@ -28,7 +28,7 @@ export async function generateJson<T>(prompt: string, options: any = {}): Promis
   // See generateText(): single attempt by default.
   const opts = { ...options, maxRetries: options.maxRetries ?? MAX_RETRIES };
   if (/prompt-test/i.test(prompt)) {
-      return getPromptText(prompt);
+    return getPromptText(prompt, opts.onStream);  // Pass onStream callback
   } 
   else if (provider === 'deepseek') { 
     return deepseekGenerateJson<T>(prompt, opts);

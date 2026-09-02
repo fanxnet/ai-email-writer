@@ -251,15 +251,15 @@ export function resetSettings(): void {
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
   useTerminology:
-    'Terminology must be professional in your field',
+    'Use accurate, standard professional terminology for the relevant industry.',
   useSimpleLanguage:
-    'Use simple, easy-to-understand language',
+    'Use plain,simple and easy-to-understand language,Avoid complex vocabulary and overly long sentences.',
   keepDetail:
-    'Keep the output detailed and focused',
+    'Keep the output detailed and focused. Cover all key information points and stay strictly on topic.',
   keepConcise:
-    'Keep the output concise and to the point',
+    'Keep the output concise and straight to the point. Respond directly to the core request without redundant wording.',
   translateToMail:
-    'Translate the instructions for the output,allowing minor revisions and polishing',
+    'Translate the reply/draft instructions as the ouput. Minor wording revisions and polishing are acceptable.',
 };
 
 export { PRESET_RULE_LABELS };

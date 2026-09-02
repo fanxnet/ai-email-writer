@@ -25,8 +25,14 @@ export function refreshUiForPromptTest(): void {
 }
 
 // 完整处理流程：刷新 UI 并返回 prompt
-export function getPromptText(prompt: string): string {
+export function getPromptText(
+  prompt: string, 
+  onStream?: (delta: string) => void
+): string {
   refreshUiForPromptTest();
+  if (onStream) {
+    onStream(prompt);  // Call streaming callback to update UI
+  }
   return prompt;
 }
 

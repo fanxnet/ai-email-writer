@@ -151,7 +151,7 @@ export async function generateReply(
   // Resolve language: 'auto' means match the original email's language
   let language: string;
   if (!options.language || options.language === 'auto') {
-  language = 'the same language as the latest original email';
+  language = 'Use the same language as the body text of the latest incoming original email';
   } else {
   language = options.language;
   }

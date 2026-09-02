@@ -24,8 +24,7 @@ Requirements:
 - Tone: {{TONE}}
 - Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
 - Include a subject line on the first line prefixed with "Subject: ",use an appropriate greeting.
-- don't add a sign-off or signature (e.g. "Regards", "Sincerely"),Do not include placeholder like [Your Name], [Company], or [Recipient]
-- Do not add any commentary outside the email itself
+- Don't add a sign-off or signature (e.g. "Regards", "Sincerely"),Don't include placeholder like [Your Name], [Company], or [Recipient],Don't add any commentary outside the email itself
 {{RULES}}
 
 Draft a complete email based on the following instructions:
@@ -50,7 +49,7 @@ Tone: {{TONE}}
 Language：{{LANGUAGE}}
 Address the reply to: {{REPLY_TO_NAME}} 
 - Reference relevant points from the original email naturally.
-- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely"),no commentary outside the reply.
+- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely"),Don't add any commentary outside the reply.
 {{RULES}}
 
 [2.Original Email]
