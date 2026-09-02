@@ -116,11 +116,11 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   replyLanguage: "auto",
   draftLanguage: "English",
   presetRules: {
-    noPlaceholders: true,
-    noSignature: true,
-    noSubjectLine: false,
-    keepShort: false,
+    useTerminologyLanguage: true,
     useSimpleLanguage: false,
+    keepDetail: false,
+    keepConcise: false,
+    translateToMail: false,
   },
   customRules: "",
   activeCareerId: "",
@@ -251,15 +251,15 @@ export function resetSettings(): void {
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
   useTerminologyLanguage:
-    "Terminology must be professional in your field",
+    'Terminology must be professional in your field',
   useSimpleLanguage:
     'Use simple, easy-to-understand language',
   keepDetail:
-    "Keep the output detailed",
+    'Keep the output detailed',
   keepConcise:
-    "Keep the output concise",
+    'Keep the output concise',
   translateToMail:
-    "Translate the instructions for draft,allowing minor revisions and polishing",
+    'Translate the instructions for draft,allowing minor revisions and polishing',
 };
 
 export { PRESET_RULE_LABELS };
