@@ -116,7 +116,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   replyLanguage: "auto",
   draftLanguage: "English",
   presetRules: {
-    useTerminologyLanguage: true,
+    useTerminology: true,
     useSimpleLanguage: false,
     keepDetail: false,
     keepConcise: false,
@@ -250,7 +250,7 @@ export function resetSettings(): void {
 
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
-  useTerminologyLanguage:
+  useTerminology:
     'Terminology must be professional in your field',
   useSimpleLanguage:
     'Use simple, easy-to-understand language',
@@ -304,6 +304,8 @@ export const GOAL_PROMPTS: Record<string, string> = {
     'Write with the strategic goal of REQUESTING A FAVOR OR INTRODUCTION. Be respectful of the recipient\'s time, clearly explain the mutual benefit, make it easy to say yes by providing context they can forward, and express genuine appreciation.',
   'resolve-complaint':
     'Write with the strategic goal of RESOLVING A COMPLAINT. Acknowledge the issue with empathy, take ownership where appropriate, propose a concrete resolution, and aim to turn a negative experience into a positive one.',
+  'business-development':
+    'Develop new clients, secure business contracts, resolve business challenges, and keep long-term, stable, and mutually beneficial business relationships.',
 };
 
 /**

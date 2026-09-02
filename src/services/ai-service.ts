@@ -5,6 +5,7 @@
 import { generateText as geminiGenerateText, generateJson as geminiGenerateJson } from './gemini';
 import { generateText as deepseekGenerateText, generateJson as deepseekGenerateJson } from './deepseek';
 import { getSetting, MAX_RETRIES } from '../features/settings';
+import { getPromptText } from './findprompt';
 
 export async function generateText(prompt: string, options: any = {}): Promise<string> {
   const provider = getSetting('aiProvider') || 'gemini';
@@ -12,7 +13,7 @@ export async function generateText(prompt: string, options: any = {}): Promise<s
   // tokens unbeknown to the user; callers can opt back in via `maxRetries`.
   const opts = { ...options, maxRetries: options.maxRetries ?? MAX_RETRIES };
   if (/prompt-test/i.test(prompt)) {
-      return prompt;
+      return getPromptText(prompt);
   } 
   else if (provider === 'deepseek') { 
       return deepseekGenerateText(prompt, opts); 
@@ -27,7 +28,7 @@ export async function generateJson<T>(prompt: string, options: any = {}): Promis
   // See generateText(): single attempt by default.
   const opts = { ...options, maxRetries: options.maxRetries ?? MAX_RETRIES };
   if (/prompt-test/i.test(prompt)) {
-      return prompt;
+      return getPromptText(prompt);
   } 
   else if (provider === 'deepseek') { 
     return deepseekGenerateJson<T>(prompt, opts);
