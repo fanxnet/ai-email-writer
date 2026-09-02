@@ -23,7 +23,6 @@ export const DRAFT_EMAIL_PROMPT = `Role:As a professional email assistant,{{PROF
 Requirements:
 - Tone: {{TONE}}
 - Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
-- Keep the email concise and to the point.
 - Include a subject line on the first line prefixed with "Subject: ",use an appropriate greeting.
 - don't add a sign-off or signature (e.g. "Regards", "Sincerely"),Do not include placeholder like [Your Name], [Company], or [Recipient]
 - Do not add any commentary outside the email itself
@@ -51,8 +50,7 @@ Tone: {{TONE}}
 Language：{{LANGUAGE}}
 Address the reply to: {{REPLY_TO_NAME}} 
 - Reference relevant points from the original email naturally.
-- Keep the reply focused and professional,no commentary outside the reply.
-- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely").
+- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely"),no commentary outside the reply.
 {{RULES}}
 
 [2.Original Email]

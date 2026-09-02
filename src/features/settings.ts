@@ -117,8 +117,8 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   draftLanguage: "English",
   presetRules: {
     useTerminology: true,
-    useSimpleLanguage: false,
-    keepDetail: false,
+    useSimpleLanguage: true,
+    keepDetail: true,
     keepConcise: false,
     translateToMail: false,
   },
@@ -255,11 +255,11 @@ const PRESET_RULE_LABELS: Record<string, string> = {
   useSimpleLanguage:
     'Use simple, easy-to-understand language',
   keepDetail:
-    'Keep the output detailed',
+    'Keep the output detailed and focused',
   keepConcise:
-    'Keep the output concise',
+    'Keep the output concise and to the point',
   translateToMail:
-    'Translate the instructions for draft,allowing minor revisions and polishing',
+    'Translate the instructions for the output,allowing minor revisions and polishing',
 };
 
 export { PRESET_RULE_LABELS };

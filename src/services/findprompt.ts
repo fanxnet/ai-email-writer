@@ -11,8 +11,8 @@
 export function refreshUiForPromptTest(): void {
   // 尝试查找常见的结果预览区域元素并显示
   const resultSelectors = [
-    '#draft-preview',
     '#reply-preview',
+    '#draft-preview',
     '.aic-preview',
   ];
 
