@@ -23,9 +23,9 @@ export const DRAFT_EMAIL_PROMPT = `Role:As a professional email assistant,{{PROF
 Requirements:
 - Tone: {{TONE}}
 - Language：{{LANGUAGE}},(unless overridden by explicit request in Reply instructions)
-- Include a subject line on the first line prefixed with "Subject: "
-- Use an appropriate greeting
-- Keep the email concise and to the point
+- Keep the email concise and to the point.
+- Include a subject line on the first line prefixed with "Subject: ",use an appropriate greeting.
+- don't add a sign-off or signature (e.g. "Regards", "Sincerely"),Do not include placeholder like [Your Name], [Company], or [Recipient]
 - Do not add any commentary outside the email itself
 {{RULES}}
 
@@ -50,9 +50,9 @@ Role:As a professional email assistant,{{PROFILE}}
 Tone: {{TONE}}
 Language：{{LANGUAGE}}
 Address the reply to: {{REPLY_TO_NAME}} 
-- Write the relpy body without subject.
 - Reference relevant points from the original email naturally.
 - Keep the reply focused and professional,no commentary outside the reply.
+- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely").
 {{RULES}}
 
 [2.Original Email]
@@ -62,7 +62,7 @@ Address the reply to: {{REPLY_TO_NAME}}
 [3.Reply Instructions(strictly)]
 {{REPLY_INSTRUCTIONS}}
 
-[4.Execution Instructions]
+[4.Execute Instructions]
 请参考原始邮件内容,遵循基本要求(除非回复说明中另有明确要求),重点围绕回复说明,输出回复.`;
 
 // ---------------------------------------------------------------------------

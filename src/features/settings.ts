@@ -250,16 +250,16 @@ export function resetSettings(): void {
 
 /** Human-readable labels for each preset rule. */
 const PRESET_RULE_LABELS: Record<string, string> = {
-  noPlaceholders:
-    'Do not include placeholder like [Your Name], [Company], or [Recipient]',
-  noSignature:
-    'Do not add a sign-off or signature (e.g. "Regards", "Sincerely")',
-  noSubjectLine:
-    "Do not include a subject line in the output",
-  keepShort:
-    "Keep the output concise — no more than 5 sentences",
+  useTerminologyLanguage:
+    "Terminology must be professional in your field",
   useSimpleLanguage:
-    "Use simple, easy-to-understand language (avoid jargon)",
+    'Use simple, easy-to-understand language',
+  keepDetail:
+    "Keep the output detailed",
+  keepConcise:
+    "Keep the output concise",
+  translateToMail:
+    "Translate the instructions for draft,allowing minor revisions and polishing",
 };
 
 export { PRESET_RULE_LABELS };
