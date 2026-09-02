@@ -20,7 +20,6 @@ export function refreshUiForPromptTest(): void {
     const el = document.querySelector(selector) as HTMLElement | null;
     if (el) {
       el.classList.remove('hidden');
-      break;
     }
   }
 }
