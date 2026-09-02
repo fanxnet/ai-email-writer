@@ -49,7 +49,7 @@ Tone: {{TONE}}
 Language：{{LANGUAGE}}
 Address the reply to: {{REPLY_TO_NAME}} 
 - Reference relevant points from the original email naturally.
-- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely"),Don't add any commentary outside the reply.
+- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely"),don't add any commentary outside the reply.
 {{RULES}}
 
 [2.Original Email]

@@ -305,7 +305,13 @@ export const GOAL_PROMPTS: Record<string, string> = {
   'resolve-complaint':
     'Write with the strategic goal of RESOLVING A COMPLAINT. Acknowledge the issue with empathy, take ownership where appropriate, propose a concrete resolution, and aim to turn a negative experience into a positive one.',
   'business-development':
-    'Develop new clients, secure business contracts, resolve business challenges, and keep long-term, stable, and mutually beneficial business relationships.',
+    'Write as a trusted commercial partner: proactively solve the client\'s problems with clear options, fully disclose costs and risks, and guide the conversation toward a quick commercial decision that benefits both sides.',
+  'project-cargo':
+    'Core business goals for email communications:\
+    - Develop new project cargo clients across the Latin American trade lane.\
+    - Secure and lock in ocean freight service contracts and booking commitments.\
+    - Resolve pricing, space allocation and operational challenges for project shipments.\
+    - Build and sustain long-term, stable, mutually beneficial cooperative relationships with clients and partners.',
 };
 
 /**
