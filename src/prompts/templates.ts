@@ -18,7 +18,7 @@
  * Placeholders: {{PROFILE}}, {{GOAL}}, {{INSTRUCTIONS}}, {{TONE}},
  *               {{LANGUAGE}}, {{RULES}}
  */
-export const DRAFT_EMAIL_PROMPT =  `[1. Role & Core Goals]
+export const DRAFT_EMAIL_PROMPT = `[1. Role & Core Goals]
 1.1 Role:As a professional email assistant,{{PROFILE}}
 1.2 {{GOAL}}
 
@@ -38,10 +38,9 @@ export const DRAFT_EMAIL_PROMPT =  `[1. Role & Core Goals]
 {{INSTRUCTIONS}}
 
 [4.Execute Instructions]
-1. Unless otherwise explicitly stated in content instructions, all output rules shall apply by default.
-2. Focus on the content instructions and comply with all output rules listed, Draft the email body.
-`;
-//Draft a complete email based on the following instructions:
+1. If there is any conflict or ambiguity between earlier and later clauses within this prompt, the later clause shall apply.
+2. Focus on the content instructions and comply with all output rules listed, Draft the email body.`;
+//1. Unless otherwise explicitly stated in content instructions, all output rules shall apply by default.
 //请遵循输出规则(除非内容说明中另有明确要求),重点围绕内容说明,起草邮件正文.
 
 // ---------------------------------------------------------------------------

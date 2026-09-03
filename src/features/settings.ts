@@ -118,7 +118,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   presetRules: {
     useTerminology: true,
     useSimpleLanguage: true,
-    keepDetail: false,
+    keepDetail: true,
     keepConcise: false,
     translateToMail: false,
   },
