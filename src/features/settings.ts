@@ -259,7 +259,7 @@ const PRESET_RULE_LABELS: Record<string, string> = {
   keepConcise:
     'Keep the output concise and straight to the point. Respond directly to the core request without redundant wording.',
   translateToMail:
-    'Translate the reply/draft instructions as the ouput. Minor wording revisions and polishing are acceptable.',
+    'Translate the content instructions as the ouput. Minor wording revisions and polishing are acceptable.',
 };
 
 export { PRESET_RULE_LABELS };
@@ -307,6 +307,7 @@ export const GOAL_PROMPTS: Record<string, string> = {
   'business-development':
     'Write as a trusted commercial partner: proactively solve the client\'s problems with clear options, fully disclose costs and risks, and guide the conversation toward a quick commercial decision that benefits both sides.',
   'project-cargo':
+    'All email communications shall be aligned with the following goals:\n' +
     '- Develop new project cargo clients across the Latin American trade lane.\n' +
     '- Secure and lock in ocean freight service contracts and booking commitments.\n' +
     '- Resolve pricing, space allocation and operational challenges for project shipments.\n' +
@@ -321,11 +322,11 @@ export function buildGoalText(goal: string, customGoalText?: string): string {
   if (!goal || goal === 'none') return '';
 
   if (goal === 'custom' && customGoalText?.trim()) {
-    return `1.2 Core Goals: ${customGoalText.trim()}`;
+    return `Core Goals: ${customGoalText.trim()}`;
   }
 
   const prompt = GOAL_PROMPTS[goal];
-  return prompt ? `1.2 Core Goals: ${prompt}` : '';
+  return prompt ? `Core Goals: ${prompt}` : '';
 }
 
 // ---------------------------------------------------------------------------
