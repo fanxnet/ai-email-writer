@@ -24,7 +24,7 @@ export const DRAFT_EMAIL_PROMPT =  `[1. Role & Core Goals]
 
 [2. Output Rules]
 2.1 Writing Guidelines:
-- Language：{{LANGUAGE}}
+- Language:{{LANGUAGE}}
 - Tone: {{TONE}}
 {{RULES}}
 2.2 Output Format Requirements:
@@ -62,7 +62,7 @@ export const REPLY_PROMPT = `[1. Role & Core Goals]
 
 [2. Output Rules]
 2.1 Writing Guidelines:
-- Language：{{LANGUAGE}}
+- Language:{{LANGUAGE}}
 - Tone: {{TONE}}
 - Reference relevant points from the original email naturally.
 {{RULES}}
@@ -73,7 +73,8 @@ export const REPLY_PROMPT = `[1. Role & Core Goals]
 - don't add any commentary outside the reply.
 
 [3.Original Email Context]
-(Email thread, ordered from newest to oldest)
+
+The email thread is numbered sequentially top to bottom. #1 at the top is the newest email; the highest number at the bottom is the oldest.
 
 {{ORIGINAL_EMAIL}}
 

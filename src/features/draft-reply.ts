@@ -127,7 +127,7 @@ export async function generateReply(
 
   // Build the original email string for the prompt (pre-truncated for safety)
   let originalEmail = `Subject: ${context.subject}\n\n`;
-  originalEmail += `--MAIL SPLIT MARKER-- the lastest\nFrom: ${context.sender.name} <${context.sender.email}>\n\n`;
+  originalEmail += `--MAIL SPLIT MARKER-- #1 the newest\nFrom: ${context.sender.name} <${context.sender.email}>\n\n`;
 
   // Resolve the body to include based on the Thread toggle:
   // - Thread off (default): keep the current email plus the newest 2 replies.
@@ -151,7 +151,7 @@ export async function generateReply(
   // Resolve language: 'auto' means match the original email's language
   let language: string;
   if (!options.language || options.language === 'auto') {
-  language = 'Use the same language as the body text of the latest incoming original email';
+  language = 'Use the same language as the body text of the newest incoming original email';
   } else {
   language = options.language;
   }
