@@ -10,9 +10,9 @@
 // 在返回 prompt 之前刷新 UI (结果区域显示)
 export function refreshUiForPromptTest(): void {
   const resultSelectors = [
-    '#result-section',       // ← 草稿结果区域的父容器
+//    '#result-section',       // ← 草稿结果区域的父容器
     '#reply-result-section', // ← 回复结果区域的父容器
-    '#draft-preview',        // ← 草稿预览元素
+//    '#draft-preview',        // ← 草稿预览元素
     '#reply-preview',        // ← 回复预览元素
   ];
 
