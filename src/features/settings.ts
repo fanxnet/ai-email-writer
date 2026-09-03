@@ -307,11 +307,10 @@ export const GOAL_PROMPTS: Record<string, string> = {
   'business-development':
     'Write as a trusted commercial partner: proactively solve the client\'s problems with clear options, fully disclose costs and risks, and guide the conversation toward a quick commercial decision that benefits both sides.',
   'project-cargo':
-    'Core business goals for email communications:\
-    - Develop new project cargo clients across the Latin American trade lane.\
-    - Secure and lock in ocean freight service contracts and booking commitments.\
-    - Resolve pricing, space allocation and operational challenges for project shipments.\
-    - Build and sustain long-term, stable, mutually beneficial cooperative relationships with clients and partners.',
+    '- Develop new project cargo clients across the Latin American trade lane.\n' +
+    '- Secure and lock in ocean freight service contracts and booking commitments.\n' +
+    '- Resolve pricing, space allocation and operational challenges for project shipments.\n' +
+    '- Build and sustain long-term, stable, mutually beneficial cooperative relationships with clients and partners.',
 };
 
 /**
@@ -322,11 +321,11 @@ export function buildGoalText(goal: string, customGoalText?: string): string {
   if (!goal || goal === 'none') return '';
 
   if (goal === 'custom' && customGoalText?.trim()) {
-    return `Goal: ${customGoalText.trim()}`;
+    return `1.2 Core Goals: ${customGoalText.trim()}`;
   }
 
   const prompt = GOAL_PROMPTS[goal];
-  return prompt ? `Goal: ${prompt}` : '';
+  return prompt ? `1.2 Core Goals: ${prompt}` : '';
 }
 
 // ---------------------------------------------------------------------------

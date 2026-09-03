@@ -42,25 +42,32 @@ Draft a complete email based on the following instructions:
  *               {{REPLY_TO_NAME}}, {{RULES}}
  *discard {{RULES}}
  */
-export const REPLY_PROMPT = `[1.Base Requirements]
-Role:As a professional email assistant,{{PROFILE}}
-{{GOAL}}
-Tone: {{TONE}}
-Language：{{LANGUAGE}}
-Address the reply to: {{REPLY_TO_NAME}} 
-- Reference relevant points from the original email naturally.
-- Include a salutation,don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely"),don't add any commentary outside the reply.
-{{RULES}}
+export const REPLY_PROMPT = `[1. Role & Core Goals]
+1.1 Role:As a professional email assistant,{{PROFILE}}
+1.2 {{GOAL}}
 
-[2.Original Email]
+[2. Output Rules]
+2.1 Content Guidelines:
+- Tone: {{TONE}}
+- Language：{{LANGUAGE}}
+- Address the reply to: {{REPLY_TO_NAME}} 
+- Reference relevant points from the original email naturally.
+{{RULES}}
+2.2 Output Format Requirements:
+- Must include a salutation.
+- don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely").
+- don't add any commentary outside the reply.
+
+[3.Original Email Context]
+(Email thread, ordered from newest to oldest)
 
 {{ORIGINAL_EMAIL}}
 
-[3.Reply Instructions(strictly)]
+[4.Reply Instructions(strictly)]
 {{REPLY_INSTRUCTIONS}}
 
-[4.Execute Instructions]
-请参考原始邮件内容,遵循基本要求(除非回复说明中另有明确要求),重点围绕回复说明,输出回复.`;
+[5.Execute Instructions]
+请参考原始邮件内容,遵循输出规则(除非回复说明中另有明确要求),重点围绕回复说明,输出回复正文.`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread
