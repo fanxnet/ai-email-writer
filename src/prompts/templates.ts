@@ -38,8 +38,8 @@ export const DRAFT_EMAIL_PROMPT = `[1. Role & Core Goals]
 {{INSTRUCTIONS}}
 
 [4.Execute Instructions]
-1. If there is any conflict or ambiguity between earlier and later clauses within this prompt, the later clause shall apply.
-2. Focus on the content instructions and comply with all output rules listed, Draft the email body.`;
+4.1 If there is any conflict or ambiguity between earlier and later clauses within this prompt, the later clause shall apply.
+4.2 Focus on the content instructions and comply with all output rules listed, Draft the email body.`;
 //1. Unless otherwise explicitly stated in content instructions, all output rules shall apply by default.
 //请遵循输出规则(除非内容说明中另有明确要求),重点围绕内容说明,起草邮件正文.
 
@@ -75,12 +75,13 @@ export const REPLY_PROMPT = `[1. Role & Core Goals]
 The email thread is numbered sequentially top to bottom. #1 at the top is the newest email; the highest number at the bottom is the oldest.
 
 {{ORIGINAL_EMAIL}}
+
 [4.Content Instructions(strictly)]
 {{REPLY_INSTRUCTIONS}}
 
 [5.Execute Instructions]
-1. If there is any conflict or ambiguity between earlier and later clauses within this prompt, the later clause shall apply.
-2. 请参考原始邮件内容,遵循输出规则,重点围绕内容说明,输出回复正文.`;
+5.1 If there is any conflict or ambiguity between earlier and later clauses within this prompt, the later clause shall apply.
+5.2 请参考原始邮件内容,遵循输出规则,重点围绕内容说明,输出回复正文.`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread
