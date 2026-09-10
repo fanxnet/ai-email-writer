@@ -262,7 +262,7 @@ const PRESET_RULE_LABELS: Record<string, string> = {
   noCommentary:
     'Don\'t add any commentary outside the reply.',
   translateToMail:
-    'Translate the content instructions as the mail body. Minor wording revisions and polishing are acceptable.',
+    'Translate the content instructions into the body of the email.',
 };
 
 export { PRESET_RULE_LABELS };
