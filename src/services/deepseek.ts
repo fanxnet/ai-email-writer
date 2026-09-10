@@ -414,7 +414,7 @@ export async function generateText(
   if (!deepseekApiKey) {
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
-  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-v4-flash';
+  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-flash';
   const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
 
   const callFn = async () => {
@@ -445,7 +445,7 @@ export async function generateJson<T = Record<string, unknown>>(
   if (!deepseekApiKey) {
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
-  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-v4-flash';
+  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-flash';
   const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
 
   const callFn = async () => {

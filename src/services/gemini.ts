@@ -27,7 +27,7 @@ export interface GenerateOptions {
   topP?: number;
   /** Top-K sampling. Default: 40 */
   topK?: number;
-  /** Which Gemini model to use. Default: user's saved setting or 'gemini-2.5-flash' */
+  /** Which Gemini model to use. Default: user's saved setting or 'gemini-3.8-flash' */
   model?: string;
   /** Override the adaptive request timeout (ms). */
   timeoutMs?: number;
@@ -46,7 +46,7 @@ export interface GenerateJsonOptions {
   temperature?: number;
   /** Maximum number of tokens in the response. Default: 200 */
   maxOutputTokens?: number;
-  /** Which Gemini model to use. Default: user's saved setting or 'gemini-2.5-flash' */
+  /** Which Gemini model to use. Default: user's saved setting or 'gemini-3.8-flash' */
   model?: string;
   /** System instruction for the model. */
   systemInstruction?: string;
@@ -97,14 +97,14 @@ export { Type };
 // Constants
 // ---------------------------------------------------------------------------
 
-const FALLBACK_MODEL = 'gemini-3-flash-preview';
+const FALLBACK_MODEL = 'gemini-flash-lite-latest';
 
 /**
  * Fast, non-thinking model for simple extraction/utility tasks
  * (translation, action items, summarization, language detection).
  * These tasks don't benefit from deep reasoning and need low latency.
  */
-export const FAST_MODEL = 'gemini-3-flash-preview';
+export const FAST_MODEL = 'gemini-flash-lite-latest';
 
 const DEFAULT_TEMPERATURE = 1.0;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2048;

@@ -288,14 +288,14 @@ function updateModelDropdown(provider: string, currentModel?: string): void {
 
   const models = provider === 'deepseek'
     ? [
-        { value: 'deepseek-v4-flash', text: 'deepseek-v4-flash' },
+        { value: 'deepseek-flash', text: 'deepseek-flash' },
         { value: 'deepseek-v4-pro', text: 'deepseek-v4-pro' }
       ]
     : [
-        { value: 'gemini-3.5-flash', text: 'gemini-3.5-flash' },
+        { value: 'gemini-3.8-flash', text: 'gemini-3.8-flash' },
         { value: 'gemini-flash-latest', text: 'gemini-flash-latest' },
         { value: 'gemini-flash-lite-latest', text: 'gemini-flash-lite-latest' },
-        { value: 'gemini-2.5-pro', text: 'gemini-2.5-pro' }
+        { value: 'gemini-3.1-pro', text: 'gemini-3.1-pro' }
       ];
 
   models.forEach(m => {
@@ -308,7 +308,7 @@ function updateModelDropdown(provider: string, currentModel?: string): void {
   if (currentModel) {
     modelSelect.value = currentModel;
   } else {
-    modelSelect.value = provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-flash-latest';
+    modelSelect.value = provider === 'deepseek' ? 'deepseek-flash' : 'gemini-flash-latest';
   }
 }
 
@@ -1872,7 +1872,7 @@ Office.onReady((info) => {
     $('btn-save-settings')?.addEventListener('click', () => {
       const provider = ($('settings-provider') as HTMLSelectElement)?.value as 'gemini' | 'deepseek' || 'gemini';
       const apiKey = ($('settings-api-key') as HTMLInputElement)?.value?.trim() || '';
-      const model = ($('settings-model') as HTMLSelectElement)?.value || (provider === 'deepseek' ? 'deepseek-v4-flash' : 'gemini-flash-latest');
+      const model = ($('settings-model') as HTMLSelectElement)?.value || (provider === 'deepseek' ? 'deepseek-flash' : 'gemini-flash-latest');
       const tone = ($('settings-tone') as HTMLSelectElement)?.value || 'professional';
       const summaryStyle = ($('settings-summary-style') as HTMLSelectElement)?.value || 'bullets';
       const replyStyle = ($('settings-reply-style') as HTMLSelectElement)?.value || 'match-original';
