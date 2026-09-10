@@ -18,7 +18,7 @@ const CONNECT_TIMEOUT_MS = 30_000; // No response headers at all.
 const STALL_TIMEOUT_MS = 60_000; // No new body data after the stream started.
 const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
 
-const DEEPSEEK_API_URL = 'https://api.deepseek.com';
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 // ---------------------------------------------------------------------------
 // Types
