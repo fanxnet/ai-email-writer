@@ -118,8 +118,9 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   presetRules: {
     useTerminology: true,
     useSimpleLanguage: true,
-    keepDetail: true,
+    keepDetail: false,
     keepConcise: false,
+    noCommentary: false,
     translateToMail: false,
   },
   customRules: "",
@@ -258,8 +259,10 @@ const PRESET_RULE_LABELS: Record<string, string> = {
     'Keep the output detailed and focused. Cover all key information points and stay strictly on topic.',
   keepConcise:
     'Keep the output concise and straight to the point. Respond directly to the core request without redundant wording.',
+  noCommentary:
+    'Don\'t add any commentary outside the reply.',
   translateToMail:
-    'Translate the content instructions as the ouput. Minor wording revisions and polishing are acceptable.',
+    'Translate the content instructions as the mail body. Minor wording revisions and polishing are acceptable.',
 };
 
 export { PRESET_RULE_LABELS };
