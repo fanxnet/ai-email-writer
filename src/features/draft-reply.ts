@@ -162,6 +162,10 @@ export async function generateReply(
   const profileText = buildProfileText();
   const rulesText = buildRulesText();
 
+  const executeInstruction = /回复提纲|翻译|translate/i.test(options.instructions)
+    ? '5.2 按照内容说明输出指定内容.'
+    : '5.2 请参考原始邮件内容,遵循输出规则,重点围绕内容说明,输出回复正文.';
+
   const prompt = buildPrompt(REPLY_PROMPT, {
     PROFILE: profileText,
     GOAL: goalText,
@@ -171,6 +175,7 @@ export async function generateReply(
     LANGUAGE: language,
     REPLY_TO_NAME: context.sender.name || context.sender.email || 'the sender',
     RULES: rulesText,
+    EXECUTEOUTPUT: executeInstruction
   });
 
   const reply = await generateText(prompt, {

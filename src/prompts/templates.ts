@@ -51,7 +51,7 @@ export const DRAFT_EMAIL_PROMPT = `[1. Role & Core Goals]
  *
  * Placeholders: {{PROFILE}}, {{GOAL}}, {{ORIGINAL_EMAIL}},
  *               {{REPLY_INSTRUCTIONS}}, {{TONE}}, {{LANGUAGE}},
- *               {{REPLY_TO_NAME}}, {{RULES}}
+ *               {{REPLY_TO_NAME}}, {{RULES}}, {{EXECUTEOUTPUT}}
  - don't add any commentary outside the reply.
  */
 export const REPLY_PROMPT = `[1. Role & Core Goals]
@@ -79,7 +79,7 @@ The email thread is numbered sequentially top to bottom. #1 at the top is the ne
 
 [5.Execute Instructions]
 5.1 If there is any conflict or ambiguity between earlier and later clauses within this prompt, the later clause shall apply.
-5.2 请参考原始邮件内容,遵循输出规则,重点围绕内容说明,输出回复正文.`;
+{{EXECUTEOUTPUT}}`;
 
 // ---------------------------------------------------------------------------
 // Summarize Thread
