@@ -780,7 +780,7 @@ window.addEventListener('beforeunload', () => abortDeepSeekRequest());
 async function handleGenerateReply(): Promise<void> {
   const instructions = ($('reply-instructions') as HTMLTextAreaElement)?.value || '';
   const tone = ($('reply-tone') as HTMLSelectElement)?.value || 'professional';
-  const reasoningMode = ($('reply-reasoning') as HTMLSelectElement)?.value as ReasoningMode || 'off';
+  const reasoningMode = ($('reply-reasoning') as HTMLSelectElement)?.value as ReasoningMode || 'fast';
   const language = ($('reply-language') as HTMLSelectElement)?.value || 'auto';
   const goal = ($('reply-goal') as HTMLSelectElement)?.value || 'none';
   const customGoal = ($('reply-goal-custom') as HTMLInputElement)?.value || '';
@@ -1434,7 +1434,7 @@ Office.onReady((info) => {
 
       // Reasoning mode select (defaults to persisted setting)
       const replyReasoning = $('reply-reasoning') as HTMLSelectElement | null;
-      if (replyReasoning) replyReasoning.value = s.reasoningMode || 'off';
+      if (replyReasoning) replyReasoning.value = s.reasoningMode || 'fast';
 
       // Summary style radio buttons
       const summaryRadio = document.querySelector(

@@ -172,7 +172,7 @@ export async function generateText(
 ): Promise<string> {
   const client = getClient();
   const modelName = options.model ?? getSetting('defaultModel') ?? FALLBACK_MODEL;
-  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
 
   const callFn = async (): Promise<string> => {
     try {
@@ -223,7 +223,7 @@ export async function generateJson<T = Record<string, unknown>>(
 ): Promise<T> {
   const client = getClient();
   const modelName = options.model ?? getSetting('defaultModel') ?? FALLBACK_MODEL;
-  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'off';
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
 
   const callFn = async (): Promise<T> => {
     try {
@@ -362,7 +362,7 @@ async function collectModelStream(
  *
  * Gemini 2.5 series uses `thinkingBudget` (0 = disabled, -1 = dynamic, or an
  * explicit token count). Versioned Gemini 3 models (e.g. gemini-3.5-flash)
- * use `thinkingLevel` (MINIMAL/LOW/MEDIUM/HIGH).
+ * use `thinkingLevel` (LOW/MEDIUM/HIGH).
  *
  * Ambiguous aliases such as `gemini-flash-latest` / `gemini-flash-lite-latest`
  * do NOT reliably accept `thinkingLevel` (some reject `MINIMAL`), so for those
@@ -378,18 +378,12 @@ function resolveThinkingConfig(
   modelName: string,
   reasoningMode: ReasoningMode,
 ): { thinkingBudget?: number; thinkingLevel?: ThinkingLevel } {
-  const isGemini25 = /gemini-2\.5/i.test(modelName);
-  const isVersionedGemini3 = /^gemini-3[.\-]/i.test(modelName);
-  const useBudget = isGemini25 || !isVersionedGemini3;
-
-  if (useBudget) {
-    if (reasoningMode === 'off') return { thinkingBudget: 0 };
-    if (reasoningMode === 'high') return { thinkingBudget: 16384 };
-    return { thinkingBudget: -1 };
+  if (reasoningMode === 'fast') {
+    return { thinkingLevel: ThinkingLevel.LOW };
   }
-
-  if (reasoningMode === 'off') return { thinkingLevel: ThinkingLevel.MINIMAL };
-  if (reasoningMode === 'high') return { thinkingLevel: ThinkingLevel.HIGH };
+  if (reasoningMode === 'high') {
+    return { thinkingLevel: ThinkingLevel.HIGH };
+  }
   return { thinkingLevel: ThinkingLevel.MEDIUM };
 }
 
