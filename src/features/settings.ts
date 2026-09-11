@@ -121,7 +121,6 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
     keepDetail: false,
     keepConcise: false,
     noCommentary: false,
-    translateToMail: false,
   },
   customRules: "",
   activeCareerId: "",
@@ -261,8 +260,6 @@ const PRESET_RULE_LABELS: Record<string, string> = {
     'Keep the output concise and straight to the point. Respond directly to the core request without redundant wording.',
   noCommentary:
     'Don\'t add any commentary outside the reply.',
-  translateToMail:
-    'Translate the content instructions as the email body.',
 };
 
 export { PRESET_RULE_LABELS };
