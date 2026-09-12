@@ -19,7 +19,6 @@ const STALL_TIMEOUT_MS = 60_000; // No new body data after the stream started.
 const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
-const DEFAULT_MODEL = 'deepseek-flash';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,6 +103,7 @@ async function streamChatCompletion(
   const startedAt = Date.now();
   let text = '';
   let finishReason: string | undefined;
+  let firstByte = false;
 
   const buildBody = () =>
     JSON.stringify({
@@ -113,27 +113,6 @@ async function streamChatCompletion(
     });
 
   const elapsed = () => Date.now() - startedAt;
-
-  // FIX(5): extract the SSE parsing so we can also use it on the final buffer
-  // flush (which previously could drop a trailing chunk with no newline).
-  const consumeLine = (rawLine: string) => {
-    const trimmed = rawLine.trim();
-    if (!trimmed.startsWith('data:')) return;
-    const payload = trimmed.slice(5).trim();
-    if (!payload || payload === '[DONE]') return;
-    try {
-      const chunk = JSON.parse(payload);
-      const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
-      const delta = choice?.delta?.content;
-      if (typeof delta === 'string' && delta.length > 0) {
-        text += delta;
-        onStream?.(delta);
-      }
-    } catch {
-      // Malformed/incomplete SSE line — skip and keep going.
-    }
-  };
 
   try {
     // Connect window: headers must arrive before CONNECT_TIMEOUT_MS.
@@ -150,9 +129,6 @@ async function streamChatCompletion(
       }),
       connectBudget,
       () => streamTimeoutError('connect'),
-      // FIX(5): ensure the underlying request is actually torn down on
-      // timeout instead of lingering in the background.
-      () => controller.abort(),
     );
 
     if (!response.ok) {
@@ -172,6 +148,10 @@ async function streamChatCompletion(
     const decoder = new TextDecoder();
     let buffer = '';
 
+    // The stream is now established (headers received) — remaining reads use
+    // the stall window.
+    firstByte = true;
+
     for (;;) {
       const overallLeft = OVERALL_TIMEOUT_MS - elapsed();
       if (overallLeft <= 0) throw streamTimeoutError('overall');
@@ -180,10 +160,7 @@ async function streamChatCompletion(
       const { done, value } = await raceWithTimeout(
         reader.read(),
         waitMs,
-        // FIX: `firstByte` was always true by this point, so the ternary
-        // was dead code — every read is, correctly, a stall check.
-        () => streamTimeoutError('stall'),
-        () => controller.abort(),
+        () => streamTimeoutError(firstByte ? 'stall' : 'connect'),
       );
 
       if (done) break;
@@ -193,17 +170,50 @@ async function streamChatCompletion(
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
-      for (const line of lines) consumeLine(line);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+
+        try {
+          const chunk = JSON.parse(payload);
+          const choice = chunk.choices?.[0];
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
+          const delta = choice?.delta?.content;
+          if (typeof delta === 'string' && delta.length > 0) {
+            text += delta;
+            onStream?.(delta);
+          }
+        } catch {
+          // Malformed/incomplete SSE line — skip and keep going.
+        }
+      }
     }
 
-    // FIX(4): previously only flushed when `decoder.decode()` had leftover
-    // bytes. If the final `data:` line arrived without a trailing newline
-    // AND the decoder had nothing buffered, `buffer` was silently dropped.
-    // Now we always flush.
-    buffer += decoder.decode();
-    if (buffer.trim()) {
-      consumeLine(buffer);
-      buffer = '';
+    // Flush any trailing bytes that never ended with a newline.
+    const tail = decoder.decode();
+    if (tail) {
+      buffer += tail;
+      const line = buffer.trim();
+      if (line.startsWith('data:')) {
+        const payload = line.slice(5).trim();
+        if (payload && payload !== '[DONE]') {
+          try {
+            const chunk = JSON.parse(payload);
+            const choice = chunk.choices?.[0];
+            if (choice?.finish_reason) finishReason = choice.finish_reason;
+            const delta = choice?.delta?.content;
+            if (typeof delta === 'string' && delta.length > 0) {
+              text += delta;
+              onStream?.(delta);
+            }
+          } catch {
+            // Ignore.
+          }
+        }
+      }
     }
 
     return { text, finishReason };
@@ -216,34 +226,21 @@ async function streamChatCompletion(
 
 /**
  * Map a normalized ReasoningMode onto DeepSeek's OpenAI-compatible request
- * params.
- *
- * FIX(1) & FIX(3): The previous implementation used an Anthropic-shaped
- * `thinking: { type: 'disabled' | 'enabled' }` field which DeepSeek's
- * OpenAI-compatible endpoint silently ignores. In `fast` mode that meant
- * reasoning was never actually suppressed, so reasoning tokens consumed the
- * same `max_tokens` budget as the visible output — producing a `length`
- * finish with no text (the exact error this service was hitting). We now use
- * the OpenAI-style `reasoning_effort` knob, and fall through to the *disabled*
- * branch for any unrecognised mode rather than enabling thinking.
+ * params. DeepSeek V4 enables thinking by default with `reasoning_effort: high`;
+ * when thinking is on, reasoning tokens are spent from the same `max_tokens`
+ * budget as the visible output — which is exactly how the output can be
+ * starved (the empty-response bug). `off` disables thinking entirely.
  */
 function resolveThinkingParams(
   reasoningMode: ReasoningMode,
 ): Record<string, unknown> {
-  if (reasoningMode === 'high') {
-    return {
-      thinking: { type: 'enabled' },
-      reasoning_effort: 'high',
-    };
-  }
   if (reasoningMode === 'fast') {
-    // 'fast' → 关闭思考
     return { thinking: { type: 'disabled' } };
   }
-  return {
-    thinking: { type: 'enabled' },
-    reasoning_effort: 'low',
-    };
+  if (reasoningMode === 'high') {
+    return { thinking: { type: 'enabled' }, reasoning_effort: 'high' };
+  }
+  return { thinking: { type: 'enabled' }, reasoning_effort: 'low' };
 }
 
 /**
@@ -253,11 +250,8 @@ function resolveThinkingParams(
  */
 function emptyResponseError(finishReason?: string): DeepSeekError {
   if (finishReason === 'length') {
-    // FIX(7): the previous copy ("use a shorter request") was misleading for
-    // short prompts. The real cause is almost always reasoning tokens eating
-    // the max_tokens budget.
     return new DeepSeekError(
-      'The model response was cut off because it reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
+      'The model response was cut off because the test reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
       DeepSeekErrorCode.EMPTY_RESPONSE,
       false,
     );
@@ -277,8 +271,7 @@ function emptyResponseError(finishReason?: string): DeepSeekError {
 }
 
 /** Build a typed timeout error for one of the health-monitoring tiers. */
-function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {
-  let message: string;
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {  let message: string;
   if (kind === 'connect') {
     message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
   } else if (kind === 'stall') {
@@ -290,30 +283,17 @@ function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekErro
   return new DeepSeekError(message, DeepSeekErrorCode.TIMEOUT, false);
 }
 
-/**
- * Race a promise against a timeout that fires `onTimeout` (an Error).
- *
- * FIX(5): added an optional `onCancel` callback so callers can tear down the
- * underlying request (e.g. abort the fetch/reader) when the timeout wins.
- * Without this, `streamChatCompletion` left orphaned connections behind on
- * every stall.
- */
+/** Race a promise against a timeout that fires `onTimeout` (an Error). */
 function raceWithTimeout<T>(
   promise: Promise<T>,
   ms: number,
   onTimeout: () => Error,
-  onCancel?: () => void,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
-        try {
-          onCancel?.();
-        } catch {
-          // Ignore cancellation failures — the timeout is what matters.
-        }
         reject(onTimeout());
       }
     }, ms);
@@ -392,68 +372,6 @@ function classifyError(error: unknown): DeepSeekError {
 }
 
 // ---------------------------------------------------------------------------
-// JSON extraction
-// ---------------------------------------------------------------------------
-
-/**
- * FIX(6): extract the first balanced JSON object/array from a string.
- *
- * The previous implementation used a greedy `/\{[\s\S]*\}/` regex which
- * over-matched when the model emitted preamble or trailing prose, and it
- * completely ignored top-level arrays. This walks the string once, respects
- * string literals / escapes, and returns the first balanced block.
- */
-function extractJson(text: string): unknown {
-  // Fast path: whole payload is already valid JSON.
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Fall through to structural extraction.
-  }
-
-  const start = text.search(/[\[{]/);
-  if (start === -1) return undefined;
-
-  const open = text[start];
-  const close = open === '{' ? '}' : ']';
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-
-    if (ch === open) {
-      depth++;
-    } else if (ch === close) {
-      depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(text.slice(start, i + 1));
-        } catch {
-          return undefined;
-        }
-      }
-    }
-  }
-
-  return undefined;
-}
-
-// ---------------------------------------------------------------------------
 // Retry with exponential backoff
 // ---------------------------------------------------------------------------
 
@@ -496,9 +414,8 @@ export async function generateText(
   if (!deepseekApiKey) {
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
-  const modelName = options.model ?? getSetting('defaultModel') ?? DEFAULT_MODEL;
-  const reasoningMode: ReasoningMode =
-    options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
+  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-flash';
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
 
   const callFn = async () => {
     const { text, finishReason } = await streamChatCompletion(
@@ -528,9 +445,8 @@ export async function generateJson<T = Record<string, unknown>>(
   if (!deepseekApiKey) {
     throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
   }
-  const modelName = options.model ?? getSetting('defaultModel') ?? DEFAULT_MODEL;
-  const reasoningMode: ReasoningMode =
-    options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
+  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-flash';
+  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
 
   const callFn = async () => {
     const { text, finishReason } = await streamChatCompletion(
@@ -552,15 +468,19 @@ export async function generateJson<T = Record<string, unknown>>(
       throw emptyResponseError(finishReason);
     }
 
-    const parsed = extractJson(text);
-    if (parsed === undefined) {
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]) as T;
+      }
       throw new DeepSeekError(
         `Model returned invalid JSON: ${text.slice(0, 100)}`,
         DeepSeekErrorCode.INVALID_JSON,
         false,
       );
     }
-    return parsed as T;
   };
 
   return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
