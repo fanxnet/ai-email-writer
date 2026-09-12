@@ -38,7 +38,7 @@ export type SummaryStyle = "bullets" | "paragraph" | "tldr";
 /** Reasoning effort for generation. 'off' disables model thinking (fast,
  * cheap, avoids the empty-response bug); 'balanced' uses default/dynamic
  * thinking; 'high' requests maximum reasoning depth. */
-export type ReasoningMode = "off" | "balanced" | "high";
+export type ReasoningMode = "fast" | "balanced" | "high";
 
 /** All persisted user preferences. */
 export interface AIComposeSettings {
@@ -126,7 +126,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   activeCareerId: "",
   conversationContextEnabled: true,
   includeThread: false,
-  reasoningMode: "off",
+  reasoningMode: "fast",
   replyStyleMode: "match-original",
 };
 
