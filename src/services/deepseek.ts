@@ -257,10 +257,7 @@ function emptyResponseError(finishReason?: string): DeepSeekError {
     // short prompts. The real cause is almost always reasoning tokens eating
     // the max_tokens budget.
     return new DeepSeekError(
-      'The model produced no visible output because it hit the token limit — ' +
-        'most commonly the hidden reasoning phase consumed the whole `max_tokens` ' +
-        'budget. Try again with reasoning disabled, a larger max_tokens, or a ' +
-        'shorter prompt.',
+      'The model response was cut off because it reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
       DeepSeekErrorCode.EMPTY_RESPONSE,
       false,
     );
