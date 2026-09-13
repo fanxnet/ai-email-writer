@@ -24,11 +24,7 @@ const MAX_RETRY_DELAY_MS = 30_000;
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 /** Fallback model when neither options nor settings provide one. */
-const DEFAULT_MODEL = 'deepseek-chat';
-
-/** Reasoning modes spend part of `max_tokens` on hidden reasoning, so they get
- * a higher floor to avoid starving the visible answer. */
-const MIN_REASONING_MAX_TOKENS = 4096;
+const DEFAULT_MODEL = 'deepseek-flash';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -289,18 +285,6 @@ function resolveThinkingParams(
     return { thinking: { type: 'enabled' }, reasoning_effort: 'high' };
   }
   return { thinking: { type: 'enabled' }, reasoning_effort: 'low' };
-}
-
-/** Give reasoning modes a higher floor so hidden reasoning can't starve output. */
-function resolveMaxTokens(
-  optionValue: unknown,
-  base: number,
-  reasoningMode: ReasoningMode,
-): number {
-  if (typeof optionValue === 'number' && Number.isFinite(optionValue) && optionValue > 0) {
-    return Math.floor(optionValue);
-  }
-  return reasoningMode === 'fast' ? base : Math.max(base, MIN_REASONING_MAX_TOKENS);
 }
 
 /**
@@ -592,7 +576,7 @@ export async function generateText(
         model,
         messages: [{ role: 'user', content: prompt }],
         temperature: typeof options.temperature === 'number' ? options.temperature : 1.0,
-        max_tokens: resolveMaxTokens(options.maxOutputTokens, 2048, reasoningMode),
+        max_tokens: options.maxOutputTokens ?? 2048,
         ...resolveThinkingParams(reasoningMode),
       },
       controller,
@@ -636,7 +620,7 @@ export async function generateJson<T = Record<string, unknown>>(
           { role: 'user', content: prompt },
         ],
         temperature: typeof options.temperature === 'number' ? options.temperature : 0.1,
-        max_tokens: resolveMaxTokens(options.maxOutputTokens, 1024, reasoningMode),
+        max_tokens: options.maxOutputTokens ?? 1024,
         response_format: { type: 'json_object' },
         ...resolveThinkingParams(reasoningMode),
       },
