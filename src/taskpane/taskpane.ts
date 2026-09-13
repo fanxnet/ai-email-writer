@@ -1965,7 +1965,7 @@ Office.onReady((info) => {
         }
         try {
           await generateText('Say hello in one word.', {
-            maxOutputTokens: 100,
+            maxOutputTokens: 50,
           //  reasoningMode: 'fast',
             temperature: 0.5,
           });

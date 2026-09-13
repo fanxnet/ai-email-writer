@@ -18,7 +18,17 @@ const CONNECT_TIMEOUT_MS = 30_000; // No response headers at all.
 const STALL_TIMEOUT_MS = 60_000; // No new body data after the stream started.
 const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
 
+/** Upper bound for backoff delays so a long outage can't push us out hours. */
+const MAX_RETRY_DELAY_MS = 30_000;
+
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+
+/** Fallback model when neither options nor settings provide one. */
+const DEFAULT_MODEL = 'deepseek-chat';
+
+/** Reasoning modes spend part of `max_tokens` on hidden reasoning, so they get
+ * a higher floor to avoid starving the visible answer. */
+const MIN_REASONING_MAX_TOKENS = 4096;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,24 +67,41 @@ export class DeepSeekError extends Error {
 // ---------------------------------------------------------------------------
 
 let deepseekApiKey = '';
+
+/** One AbortController per in-flight generation, spanning the retry loop so an
+ * abort during backoff still stops the pending work. */
 let activeController: AbortController | null = null;
 
 export function initDeepSeekClient(apiKey: string): void {
-  if (!apiKey || apiKey.trim().length === 0) {
-    throw new Error('API key is required for DeepSeek.');
+  const trimmed = typeof apiKey === 'string' ? apiKey.trim() : '';
+  if (!trimmed) {
+    throw new DeepSeekError(
+      'API key is required for DeepSeek.',
+      DeepSeekErrorCode.INVALID_API_KEY,
+      false,
+    );
   }
-  deepseekApiKey = apiKey;
+  deepseekApiKey = trimmed;
 }
 
 /**
- * Abort any in-flight DeepSeek request (used when the user starts a new
- * action or the add-in unloads).
+ * Abort the in-flight DeepSeek request (used when the user starts a new
+ * action or the add-in unloads). Also cancels a retry waiting in backoff.
  */
 export function abortDeepSeekRequest(): void {
   if (activeController) {
-    activeController.abort();
+    const controller = activeController;
     activeController = null;
+    try {
+      controller.abort();
+    } catch {
+      // ignore
+    }
   }
+}
+
+function abortedError(): DeepSeekError {
+  return new DeepSeekError('Request aborted.', DeepSeekErrorCode.ABORTED, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -91,28 +118,22 @@ export function abortDeepSeekRequest(): void {
  *    (e.g. a model that stops generating — retrying won't help).
  *  - Overall ceiling: fails if the whole response exceeds `OVERALL_TIMEOUT_MS`.
  *
- * The request is registered on `activeController` so `abortDeepSeekRequest`
- * still cancels it. Timeouts are hard failures (never retried).
+ * Timeouts abort the underlying request, and `[DONE]` terminates the read
+ * loop immediately. If any delta already reached the UI, retryable errors are
+ * downgraded to non-retryable so a retry can't duplicate visible output.
  */
 async function streamChatCompletion(
   body: Record<string, unknown>,
+  controller: AbortController,
   onStream?: (delta: string) => void,
 ): Promise<{ text: string; finishReason?: string }> {
-  const controller = new AbortController();
-  activeController = controller;
   const startedAt = Date.now();
+  const elapsed = () => Date.now() - startedAt;
+
   let text = '';
   let finishReason: string | undefined;
-  let firstByte = false;
-
-  const buildBody = () =>
-    JSON.stringify({
-      ...body,
-      stream: true,
-      stream_options: { include_usage: true },
-    });
-
-  const elapsed = () => Date.now() - startedAt;
+  let streamed = false;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
   try {
     // Connect window: headers must arrive before CONNECT_TIMEOUT_MS.
@@ -122,17 +143,25 @@ async function streamChatCompletion(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
           'Authorization': `Bearer ${deepseekApiKey}`,
         },
-        body: buildBody(),
+        body: JSON.stringify({
+          ...body,
+          stream: true,
+          stream_options: { include_usage: true },
+        }),
         signal: controller.signal,
       }),
       connectBudget,
-      () => streamTimeoutError('connect'),
+      () => {
+        controller.abort();
+        return streamTimeoutError('connect');
+      },
     );
 
     if (!response.ok) {
-      const errText = await response.text();
+      const errText = await response.text().catch(() => '');
       throw classifyHttpError(response.status, errText);
     }
 
@@ -144,83 +173,102 @@ async function streamChatCompletion(
       );
     }
 
-    const reader = response.body.getReader();
+    reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let sawDone = false;
 
-    // The stream is now established (headers received) — remaining reads use
-    // the stall window.
-    firstByte = true;
+    /** Parse one SSE line. Returns true when the stream signalled `[DONE]`. */
+    const handleLine = (line: string): boolean => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) return false; // comment / keep-alive
+      if (!trimmed.startsWith('data:')) return false;
 
-    for (;;) {
+      const payload = trimmed.slice(5).trim();
+      if (!payload) return false;
+      if (payload === '[DONE]') return true;
+
+      try {
+        const chunk = JSON.parse(payload);
+        const choice = chunk?.choices?.[0];
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
+        const delta = choice?.delta?.content;
+        if (typeof delta === 'string' && delta.length > 0) {
+          text += delta;
+          streamed = true;
+          try {
+            onStream?.(delta);
+          } catch {
+            // A UI callback error must not kill the network stream.
+          }
+        }
+      } catch {
+        // Malformed / partial SSE payload — skip and keep going.
+      }
+      return false;
+    };
+
+    while (!sawDone) {
       const overallLeft = OVERALL_TIMEOUT_MS - elapsed();
-      if (overallLeft <= 0) throw streamTimeoutError('overall');
+      if (overallLeft <= 0) {
+        controller.abort();
+        throw streamTimeoutError('overall');
+      }
 
       const waitMs = Math.min(STALL_TIMEOUT_MS, overallLeft);
+      // If the wait was clipped by the overall ceiling, the timeout is
+      // "overall", not "stall" — the user-facing message must match reality.
+      const isOverall = waitMs < STALL_TIMEOUT_MS;
+
       const { done, value } = await raceWithTimeout(
         reader.read(),
         waitMs,
-        () => streamTimeoutError(firstByte ? 'stall' : 'connect'),
+        () => {
+          controller.abort();
+          reader?.cancel().catch(() => {
+            // ignore
+          });
+          return streamTimeoutError(isOverall ? 'overall' : 'stall');
+        },
       );
 
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) continue;
-
-        const payload = trimmed.slice(5).trim();
-        if (!payload || payload === '[DONE]') continue;
-
-        try {
-          const chunk = JSON.parse(payload);
-          const choice = chunk.choices?.[0];
-          if (choice?.finish_reason) finishReason = choice.finish_reason;
-          const delta = choice?.delta?.content;
-          if (typeof delta === 'string' && delta.length > 0) {
-            text += delta;
-            onStream?.(delta);
-          }
-        } catch {
-          // Malformed/incomplete SSE line — skip and keep going.
+        if (handleLine(line)) {
+          sawDone = true;
+          break;
         }
       }
     }
 
     // Flush any trailing bytes that never ended with a newline.
-    const tail = decoder.decode();
-    if (tail) {
-      buffer += tail;
-      const line = buffer.trim();
-      if (line.startsWith('data:')) {
-        const payload = line.slice(5).trim();
-        if (payload && payload !== '[DONE]') {
-          try {
-            const chunk = JSON.parse(payload);
-            const choice = chunk.choices?.[0];
-            if (choice?.finish_reason) finishReason = choice.finish_reason;
-            const delta = choice?.delta?.content;
-            if (typeof delta === 'string' && delta.length > 0) {
-              text += delta;
-              onStream?.(delta);
-            }
-          } catch {
-            // Ignore.
-          }
-        }
+    if (!sawDone) {
+      const tail = decoder.decode();
+      if (tail) buffer += tail;
+      for (const line of buffer.split('\n')) {
+        if (handleLine(line)) break;
       }
     }
 
     return { text, finishReason };
   } catch (error) {
-    throw classifyStreamError(error, controller);
+    const classified = classifyStreamError(error, controller);
+    // Once part of the answer reached the UI, retrying would duplicate it.
+    if (streamed && classified.retryable) classified.retryable = false;
+    throw classified;
   } finally {
-    if (activeController === controller) activeController = null;
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 
@@ -243,6 +291,18 @@ function resolveThinkingParams(
   return { thinking: { type: 'enabled' }, reasoning_effort: 'low' };
 }
 
+/** Give reasoning modes a higher floor so hidden reasoning can't starve output. */
+function resolveMaxTokens(
+  optionValue: unknown,
+  base: number,
+  reasoningMode: ReasoningMode,
+): number {
+  if (typeof optionValue === 'number' && Number.isFinite(optionValue) && optionValue > 0) {
+    return Math.floor(optionValue);
+  }
+  return reasoningMode === 'fast' ? base : Math.max(base, MIN_REASONING_MAX_TOKENS);
+}
+
 /**
  * Build the typed error thrown when DeepSeek returns no text, choosing a
  * message based on the stream's finish reason so the user gets a precise
@@ -251,7 +311,7 @@ function resolveThinkingParams(
 function emptyResponseError(finishReason?: string): DeepSeekError {
   if (finishReason === 'length') {
     return new DeepSeekError(
-      'The model response was cut off because the test reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
+      'The model response was cut off because the request reached the maximum output token limit. Try again, use a shorter request, or disable "Reasoning" mode.',
       DeepSeekErrorCode.EMPTY_RESPONSE,
       false,
     );
@@ -271,7 +331,8 @@ function emptyResponseError(finishReason?: string): DeepSeekError {
 }
 
 /** Build a typed timeout error for one of the health-monitoring tiers. */
-function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {  let message: string;
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): DeepSeekError {
+  let message: string;
   if (kind === 'connect') {
     message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
   } else if (kind === 'stall') {
@@ -292,26 +353,27 @@ function raceWithTimeout<T>(
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
+      if (settled) return;
+      settled = true;
+      try {
         reject(onTimeout());
+      } catch (err) {
+        reject(err);
       }
     }, ms);
 
     promise.then(
       (value) => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          resolve(value);
-        }
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
       },
       (error) => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          reject(error);
-        }
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
       },
     );
   });
@@ -321,12 +383,14 @@ function raceWithTimeout<T>(
 function classifyStreamError(error: unknown, controller: AbortController): DeepSeekError {
   if (error instanceof DeepSeekError) return error;
 
-  if (controller.signal.aborted) {
-    return new DeepSeekError('Request aborted.', DeepSeekErrorCode.ABORTED, false);
-  }
+  if (controller.signal.aborted) return abortedError();
 
   const message = error instanceof Error ? error.message : String(error);
-  if (/network|fetch failed|ECONNREFUSED|ENOTFOUND|offline/i.test(message)) {
+  if (
+    /network|fetch failed|failed to fetch|load failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|offline/i.test(
+      message,
+    )
+  ) {
     return new DeepSeekError(
       `Network error: ${message}`,
       DeepSeekErrorCode.NETWORK_ERROR,
@@ -346,6 +410,14 @@ function classifyHttpError(status: number, body: string): DeepSeekError {
     return new DeepSeekError(
       'Invalid or expired DeepSeek API key. Please check your API key.',
       DeepSeekErrorCode.INVALID_API_KEY,
+      false,
+      status,
+    );
+  }
+  if (status === 402) {
+    return new DeepSeekError(
+      'DeepSeek account has insufficient balance. Please top up and try again.',
+      DeepSeekErrorCode.API_ERROR,
       false,
       status,
     );
@@ -375,32 +447,124 @@ function classifyError(error: unknown): DeepSeekError {
 // Retry with exponential backoff
 // ---------------------------------------------------------------------------
 
+/** Sleep that wakes up immediately when the controller is aborted. */
+function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortedError());
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortedError());
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /**
  * Retry a function with exponential backoff. Only retries errors marked as
  * `retryable` (transient server / rate-limit / network failures) — never
- * empty responses, invalid keys, timeouts, or malformed payloads.
+ * empty responses, invalid keys, timeouts, or malformed payloads. The
+ * controller aborts both the in-flight attempt and the backoff wait.
  */
-async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries: number = MAX_RETRIES): Promise<T> {
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  controller: AbortController,
+  maxRetries: number,
+): Promise<T> {
   let lastError: DeepSeekError | undefined;
   let delay = INITIAL_RETRY_DELAY_MS;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (controller.signal.aborted) throw abortedError();
+
     try {
       return await fn();
     } catch (error) {
       lastError = classifyError(error);
 
-      if (!lastError.retryable || attempt === maxRetries) {
-        throw lastError;
-      }
+      if (controller.signal.aborted) throw abortedError();
+      if (!lastError.retryable || attempt === maxRetries) throw lastError;
 
       const jitter = Math.random() * 0.3 * delay;
-      await new Promise((resolve) => setTimeout(resolve, delay + jitter));
-      delay *= RETRY_BACKOFF_FACTOR;
+      await sleepWithAbort(delay + jitter, controller.signal);
+      delay = Math.min(delay * RETRY_BACKOFF_FACTOR, MAX_RETRY_DELAY_MS);
     }
   }
 
-  throw lastError!;
+  throw lastError ?? new DeepSeekError('Request failed.', DeepSeekErrorCode.UNKNOWN, false);
+}
+
+// ---------------------------------------------------------------------------
+// Shared request helpers
+// ---------------------------------------------------------------------------
+
+/** Start a fresh abort session and register it as the active request. */
+function startSession(): AbortController {
+  abortDeepSeekRequest();
+  const controller = new AbortController();
+  activeController = controller;
+  return controller;
+}
+
+/** Clear the active controller if it's still this session. */
+function endSession(controller: AbortController): void {
+  if (activeController === controller) activeController = null;
+}
+
+/** Resolve model / reasoning mode / retries from options + settings. */
+function resolveRequestConfig(options: any) {
+  const model =
+    (typeof options.model === 'string' && options.model.trim()) ||
+    getSetting('defaultModel') ||
+    DEFAULT_MODEL;
+  const reasoningMode: ReasoningMode =
+    options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
+  const maxRetries =
+    Number.isInteger(options.maxRetries) && options.maxRetries >= 0
+      ? options.maxRetries
+      : MAX_RETRIES;
+  return { model, reasoningMode, maxRetries };
+}
+
+/** Parse a model response into JSON, tolerating code fences and prose. */
+function parseJsonResponse<T>(text: string): T {
+  const trimmed = text.trim();
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    // fall through
+  }
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    try {
+      return JSON.parse(fenced[1].trim()) as T;
+    } catch {
+      // fall through
+    }
+  }
+
+  const objMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      return JSON.parse(objMatch[0]) as T;
+    } catch {
+      // fall through
+    }
+  }
+
+  throw new DeepSeekError(
+    `Model returned invalid JSON: ${trimmed.slice(0, 100)}`,
+    DeepSeekErrorCode.INVALID_JSON,
+    false,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -412,30 +576,38 @@ export async function generateText(
   options: any = {},
 ): Promise<string> {
   if (!deepseekApiKey) {
-    throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
+    throw new DeepSeekError(
+      'DeepSeek client not initialised. Call initDeepSeekClient first.',
+      DeepSeekErrorCode.INVALID_API_KEY,
+      false,
+    );
   }
-  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-flash';
-  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
+
+  const { model, reasoningMode, maxRetries } = resolveRequestConfig(options);
+  const controller = startSession();
 
   const callFn = async () => {
     const { text, finishReason } = await streamChatCompletion(
       {
-        model: modelName,
+        model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: options.temperature ?? 1.0,
-        max_tokens: options.maxOutputTokens ?? 2048,
+        temperature: typeof options.temperature === 'number' ? options.temperature : 1.0,
+        max_tokens: resolveMaxTokens(options.maxOutputTokens, 2048, reasoningMode),
         ...resolveThinkingParams(reasoningMode),
       },
+      controller,
       options.onStream,
     );
 
-    if (!text || !text.trim()) {
-      throw emptyResponseError(finishReason);
-    }
+    if (!text || !text.trim()) throw emptyResponseError(finishReason);
     return text;
   };
 
-  return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
+  try {
+    return await retryWithBackoff(callFn, controller, maxRetries);
+  } finally {
+    endSession(controller);
+  }
 }
 
 export async function generateJson<T = Record<string, unknown>>(
@@ -443,45 +615,42 @@ export async function generateJson<T = Record<string, unknown>>(
   options: any = {},
 ): Promise<T> {
   if (!deepseekApiKey) {
-    throw new Error('DeepSeek client not initialised. Call initDeepSeekClient first.');
+    throw new DeepSeekError(
+      'DeepSeek client not initialised. Call initDeepSeekClient first.',
+      DeepSeekErrorCode.INVALID_API_KEY,
+      false,
+    );
   }
-  const modelName = options.model ?? getSetting('defaultModel') ?? 'deepseek-flash';
-  const reasoningMode = options.reasoningMode ?? getSetting('reasoningMode') ?? 'fast';
+
+  const { model, reasoningMode, maxRetries } = resolveRequestConfig(options);
+  const controller = startSession();
 
   const callFn = async () => {
     const { text, finishReason } = await streamChatCompletion(
       {
-        model: modelName,
+        model,
         messages: [
-          ...(options.systemInstruction ? [{ role: 'system', content: options.systemInstruction }] : []),
+          ...(options.systemInstruction
+            ? [{ role: 'system', content: options.systemInstruction }]
+            : []),
           { role: 'user', content: prompt },
         ],
-        temperature: options.temperature ?? 0.1,
-        max_tokens: options.maxOutputTokens ?? 1024,
+        temperature: typeof options.temperature === 'number' ? options.temperature : 0.1,
+        max_tokens: resolveMaxTokens(options.maxOutputTokens, 1024, reasoningMode),
         response_format: { type: 'json_object' },
         ...resolveThinkingParams(reasoningMode),
       },
+      controller,
       options.onStream,
     );
 
-    if (!text || !text.trim()) {
-      throw emptyResponseError(finishReason);
-    }
-
-    try {
-      return JSON.parse(text) as T;
-    } catch {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]) as T;
-      }
-      throw new DeepSeekError(
-        `Model returned invalid JSON: ${text.slice(0, 100)}`,
-        DeepSeekErrorCode.INVALID_JSON,
-        false,
-      );
-    }
+    if (!text || !text.trim()) throw emptyResponseError(finishReason);
+    return parseJsonResponse<T>(text);
   };
 
-  return retryWithBackoff(callFn, options.maxRetries ?? MAX_RETRIES);
+  try {
+    return await retryWithBackoff(callFn, controller, maxRetries);
+  } finally {
+    endSession(controller);
+  }
 }
