@@ -78,14 +78,6 @@ const SIGNATURE_TRIGGERS = [
     'Thanks',
     'Thank you',
     'With appreciation',
-    // Spanish
-    'Saludos',
-    'Saludos cordiales',
-    'Un cordial saludo',
-    'Atentamente',
-    'Saludos atentos',
-    'Muchas gracias',
-    'Quedo atento',
     // Portuguese
     'Atenciosamente',
     'Atencionalmente',
@@ -94,6 +86,14 @@ const SIGNATURE_TRIGGERS = [
     'Cordialmente',
     'Grato',
     'Grata',
+    // Spanish
+    'Saludos',
+    'Saludos cordiales',
+    'Un cordial saludo',
+    'Atentamente',
+    'Saludos atentos',
+    'Muchas gracias',
+    'Quedo atento',
     // French
     'Cordialement',
     'Bien cordialement',
