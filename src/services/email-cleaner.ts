@@ -136,10 +136,11 @@ const SIGNATURE_TRIGGERS = [
 
 
 const SIGNATURE_NAMES = [
-    'Angelina Liu',
-    'Excited to work on this',
     'Thank you so much',
     'Thank you very much',
+    'Excited to work on this',
+    'Angelina Liu',
+    'Parisi Grand Smooth Logistics Ltd.',
 ];
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
