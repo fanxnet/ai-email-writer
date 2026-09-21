@@ -34,6 +34,8 @@ import {
   clearEmailContext,
   restoreFromHistory,
   DraftReplyOptions,
+  getEmailContext,
+  MIN_KEEP_REPLIES,
 } from '../features/draft-reply';
 import {
   summarizeThread,
@@ -86,7 +88,7 @@ import {
   clearAllConversations,
   getConversation,
 } from '../features/conversation-memory';
-
+import { buildThreadBodyText, cleanThreadEmails } from '../services/email-cleaner';
 // ---------------------------------------------------------------------------
 // DOM helpers
 // ---------------------------------------------------------------------------
@@ -901,10 +903,8 @@ async function handleSuggestReplies(): Promise<void> {
   const writer = streamInto('reply-suggestions');
 
   try {
-    const { getEmailContext, buildThreadBodyText, MIN_KEEP_REPLIES } = await import('../features/draft-reply');
     const context = await getEmailContext();
-
-    const body = buildThreadBodyText(context.bodyHtml ?? '', MIN_KEEP_REPLIES);
+    const body = cleanThreadEmails(buildThreadBodyText(context.bodyHtml ?? '', MIN_KEEP_REPLIES),true);
     const emailSummary = `From: ${context.sender.name} <${context.sender.email}>\nSubject: ${context.subject}\n\n${body}`.slice(0, 2000);
 
     const isDouble = ($('reply-double') as HTMLInputElement)?.checked;
