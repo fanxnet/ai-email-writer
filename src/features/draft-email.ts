@@ -222,11 +222,11 @@ export function restoreDraftFromStorage(): { draft: string; options: DraftEmailO
 function getLengthHint(length: string): string {
   switch (length) {
     case 'short':
-      return 'Desired length: Keep it brief — 8 sentences maximum;';
+      return 'Desired length: Keep it brief as soon as possible — no more than 8 sentences;';
+    case 'standard':
+      return 'Desired length: Approximately the same length in words as the text below, within ±25%;';
     case 'detailed':
       return 'Desired length: Write a thorough, detailed email covering all points;';
-    case 'standard':
-      return 'Desired length: Standard length — approximately the same length(sentence or tokens) as the text below;';
     case 'translation':
     default:
       return 'Translate the following text and use the translation as the email body:';
