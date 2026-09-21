@@ -181,9 +181,9 @@ const salutePattern = [...SIGNATURE_TRIGGERS]
     .join('|');
 */
 // 关键修复：移除末尾 $ 行尾锚点！
-// 只要存在一对 关键词 (/ & , | 四种分隔符)关键词，后面还可以有更多链式内容
+// 只要存在一对 关键词 (/ & , and | 分隔符)关键词，后面还可以有更多链式内容
 const multiSaluteRx = new RegExp(
-    `(${salutePattern})\\s*(?:\\/|&|,|\\|)\\s*(${salutePattern})\\s*[,.!~;]*`,
+    `(${salutePattern})\\s*(?:\\/|&|,|and|\\|)\\s*(${salutePattern})\\s*[,.!~;]*`,
     'i'
 );
 
