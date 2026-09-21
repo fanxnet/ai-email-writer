@@ -126,6 +126,7 @@ ${lastDraft}
 
 Please revise the draft email based on on the following instructions:
 ${refinement}`;
+
   const reasoningMode = getSetting('reasoningMode');
   const refined = await generateText(prompt, {
     temperature: 0.6,
@@ -224,7 +225,7 @@ function getLengthHint(length: string): string {
       return 'Desired length: Keep it brief — 8 sentences maximum;';
     case 'detailed':
       return 'Desired length: Write a thorough, detailed email covering all points;';
-    case 'medium':
+    case 'standard':
       return 'Desired length: Standard length — approximately the same length(sentence or tokens) as the text below;';
     case 'translation':
     default:
@@ -233,6 +234,7 @@ function getLengthHint(length: string): string {
 }
 
 function getMaxTokensForReasoning(reasoningMode: string): number {
+  const reasoningMode = getSetting('reasoningMode');
   switch (reasoningMode) {
     case 'fast':
       return 2048;

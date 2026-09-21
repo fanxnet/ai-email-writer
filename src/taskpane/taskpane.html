@@ -335,7 +335,7 @@
             >
             <select id="draft-length" class="aic-select">
               <option value="short">Short</option>
-              <option value="medium">Medium</option>
+              <option value="standard">Standard</option>
               <option value="detailed">Detailed</option>
               <option value="translation" selected>Tanslate</option>
             </select>
@@ -663,8 +663,8 @@
         <div class="mb-lg">
           <label class="block text-sm font-medium text-aic-text-secondary mb-xs" for="reply-language">Reply language</label>
           <select id="reply-language" class="aic-select">
-            <option value="auto" selected>Auto-detect (match email)</option>
-            <option value="English">English</option>
+            <option value="auto">Auto-detect (match email)</option>
+            <option value="English" selected>English</option>
             <option value="Afrikaans">Afrikaans</option>
             <option value="Arabic">Arabic</option>
             <option value="Chinese (Simplified)">Chinese (Simplified)</option>
@@ -1398,7 +1398,7 @@
           </label>
           
           <label class="flex items-start gap-sm mb-sm cursor-pointer">
-            <input type="checkbox" id="rule-keepConcise" class="mt-[2px] accent-aic-purple" />
+            <input type="checkbox" id="rule-keepConcise" class="mt-[2px] accent-aic-purple" checked />
             <span class="text-sm text-aic-text">Keep the output concise and straight to the point.</span>
           </label>
           

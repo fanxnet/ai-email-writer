@@ -631,7 +631,7 @@ function scrollToBottom(el: HTMLElement | null): void {
 async function handleGenerate(): Promise<void> {
   const instructions = ($('draft-instructions') as HTMLTextAreaElement)?.value || '';
   const tone = ($('draft-tone') as HTMLSelectElement)?.value || 'professional';
-  const length = ($('draft-length') as HTMLSelectElement)?.value || 'medium';
+  const length = ($('draft-length') as HTMLSelectElement)?.value || 'standard';
   const language = ($('draft-language') as HTMLSelectElement)?.value || 'English';
   const goal = ($('draft-goal') as HTMLSelectElement)?.value || 'none';
   const customGoal = ($('draft-goal-custom') as HTMLInputElement)?.value || '';
