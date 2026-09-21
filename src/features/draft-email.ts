@@ -32,7 +32,6 @@ export interface DraftEmailOptions {
   goalText?: string;
 }
 
-const reasoningMode = getSetting('reasoningMode');
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -58,12 +57,11 @@ export async function generateDraft(
 
   // Map length preference to a prompt hint
   const lengthHint = getLengthHint(options.length);
-
+  const reasoningMode = getSetting('reasoningMode');
   // Build Goal, Profile, and Rules as separate prompt sections
   const goalText = options.goalText || '';
   const profileText = buildProfileText();
   const rulesText = buildRulesText();
-r
   // Build the prompt from the template
   const prompt = buildPrompt(DRAFT_EMAIL_PROMPT, {
     PROFILE: profileText,
@@ -128,7 +126,7 @@ ${lastDraft}
 
 Please revise the draft email based on on the following instructions:
 ${refinement}`;
-
+  const reasoningMode = getSetting('reasoningMode');
   const refined = await generateText(prompt, {
     temperature: 0.6,
     maxOutputTokens: getMaxTokensForReasoning(reasoningMode),
