@@ -227,7 +227,7 @@ function getLengthHint(length: string): string {
     case 'detailed':
       return 'Desired length: Write a thorough, detailed email covering all points;';
     case 'medium':
-      return 'Desired length: Standard length — approximately the same length as the text below;';
+      return 'Desired length: Standard length — approximately the same length(sentence or tokens) as the text below;';
     case 'translation':
     default:
       return 'Translate the following text and use the translation as the email body:';
