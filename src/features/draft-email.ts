@@ -234,7 +234,6 @@ function getLengthHint(length: string): string {
 }
 
 function getMaxTokensForReasoning(reasoningMode: string): number {
-  const reasoningMode = getSetting('reasoningMode');
   switch (reasoningMode) {
     case 'fast':
       return 2048;
