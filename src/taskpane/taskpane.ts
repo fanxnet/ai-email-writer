@@ -905,7 +905,7 @@ async function handleSuggestReplies(): Promise<void> {
   try {
     const context = await getEmailContext();
     const body = cleanThreadEmails(buildThreadBodyText(context.bodyHtml ?? '', MIN_KEEP_REPLIES),true);
-    const emailSummary = `From: ${context.sender.name} <${context.sender.email}>\nSubject: ${context.subject}\n\n${body}`.slice(0, 2000);
+    const emailSummary = `From: ${context.sender.name} <${context.sender.email}>\nSubject: ${context.subject}\n\n${body}`.slice(0, 8192);
 
     const isDouble = ($('reply-double') as HTMLInputElement)?.checked;
     const wordRange = isDouble ? '10-24' : '5-12';
@@ -919,7 +919,7 @@ ${emailSummary}`;
 
     const result = await generateText(prompt, {
       temperature: 0.9,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
       onStream: (delta) => {
         writer?.append(delta);
       },
