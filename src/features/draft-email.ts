@@ -32,6 +32,7 @@ export interface DraftEmailOptions {
   goalText?: string;
 }
 
+const reasoningMode = getSetting('reasoningMode');
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -62,12 +63,12 @@ export async function generateDraft(
   const goalText = options.goalText || '';
   const profileText = buildProfileText();
   const rulesText = buildRulesText();
-
+r
   // Build the prompt from the template
   const prompt = buildPrompt(DRAFT_EMAIL_PROMPT, {
     PROFILE: profileText,
     GOAL: goalText,
-    INSTRUCTIONS: `${options.instructions}\n\nDesired length: ${lengthHint}`,
+    INSTRUCTIONS: `${lengthHint}\n${options.instructions}`,
     TONE: options.tone || 'professional',
     LANGUAGE: options.language || 'English',
     RULES: rulesText,
@@ -76,8 +77,8 @@ export async function generateDraft(
   // Call Ai (reasoning mode is inherited from the value saved in the Reply UI)
   const draft = await generateText(prompt, {
     temperature: 0.7,
-    maxOutputTokens: getMaxTokensForLength(options.length),
-    reasoningMode: getSetting('reasoningMode'),
+    maxOutputTokens: getMaxTokensForReasoning(reasoningMode),
+    reasoningMode: reasoningMode,
     onStream,
   });
 
@@ -130,8 +131,8 @@ ${refinement}`;
 
   const refined = await generateText(prompt, {
     temperature: 0.6,
-    maxOutputTokens: 2048,
-    reasoningMode: getSetting('reasoningMode'),
+    maxOutputTokens: getMaxTokensForReasoning(reasoningMode),
+    reasoningMode: reasoningMode,
     onStream,
   });
 
@@ -222,24 +223,26 @@ export function restoreDraftFromStorage(): { draft: string; options: DraftEmailO
 function getLengthHint(length: string): string {
   switch (length) {
     case 'short':
-      return 'Keep it brief — 2-4 sentences maximum.';
+      return 'Desired length: Keep it brief — 8 sentences maximum;';
     case 'detailed':
-      return 'Write a thorough, detailed email covering all points.';
+      return 'Desired length: Write a thorough, detailed email covering all points;';
     case 'medium':
+      return 'Desired length: Standard length — approximately the same length as the text below;';
+    case 'translation':
     default:
-      return 'Standard length — a few short paragraphs.';
+      return 'Translate the following text and use the translation as the email body:';
   }
 }
 
-function getMaxTokensForLength(length: string): number {
-  switch (length) {
-    case 'short':
-      return 512;
-    case 'detailed':
-      return 4096;
-    case 'medium':
-    default:
+function getMaxTokensForReasoning(reasoningMode: string): number {
+  switch (reasoningMode) {
+    case 'fast':
       return 2048;
+    case 'high':
+      return 8192;
+    case 'balanced':
+    default:
+      return 4096;
   }
 }
 

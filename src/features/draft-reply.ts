@@ -56,6 +56,7 @@ export interface EmailContext {
 /** Max tokens of original email to include in the reply prompt. */
 const MAX_CONTENT_TOKENS = 6000;
 
+const MAX_OUTPUT_TOKENS = 8192;
 /** Thread off: keep the current email plus the newest 2 replies. */
 export const MIN_KEEP_REPLIES = 2;
 
@@ -180,7 +181,7 @@ export async function generateReply(
 
   const reply = await generateText(prompt, {
     temperature: 0.7,
-    maxOutputTokens: 8192,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     reasoningMode: options.reasoningMode,
     onStream,
   });
@@ -284,7 +285,7 @@ ${refinement}`;
 
   const refined = await generateText(prompt, {
     temperature: 0.6,
-    maxOutputTokens: 8192,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     reasoningMode: lastReplyOptions?.reasoningMode,
     onStream,
   });

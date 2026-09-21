@@ -25,6 +25,7 @@ const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 /** Fallback model when neither options nor settings provide one. */
 const DEFAULT_MODEL = 'deepseek-flash';
+const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -576,7 +577,7 @@ export async function generateText(
         model,
         messages: [{ role: 'user', content: prompt }],
         temperature: typeof options.temperature === 'number' ? options.temperature : 1.0,
-        max_tokens: options.maxOutputTokens ?? 2048,
+        max_tokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         ...resolveThinkingParams(reasoningMode),
       },
       controller,
@@ -620,7 +621,7 @@ export async function generateJson<T = Record<string, unknown>>(
           { role: 'user', content: prompt },
         ],
         temperature: typeof options.temperature === 'number' ? options.temperature : 0.1,
-        max_tokens: options.maxOutputTokens ?? 1024,
+        max_tokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         response_format: { type: 'json_object' },
         ...resolveThinkingParams(reasoningMode),
       },

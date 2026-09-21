@@ -35,7 +35,7 @@ export type Tone = "professional" | "formal" | "friendly" | "casual";
 /** Summary style options for the Summarize feature. */
 export type SummaryStyle = "bullets" | "paragraph" | "tldr";
 
-/** Reasoning effort for generation. 'off' disables model thinking (fast,
+/** Reasoning effort for generation. 'fast' disables model thinking (fast,
  * cheap, avoids the empty-response bug); 'balanced' uses default/dynamic
  * thinking; 'high' requests maximum reasoning depth. */
 export type ReasoningMode = "fast" | "balanced" | "high";

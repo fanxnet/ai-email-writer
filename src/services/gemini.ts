@@ -107,7 +107,7 @@ const FALLBACK_MODEL = 'gemini-flash-lite-latest';
 export const FAST_MODEL = 'gemini-flash-lite-latest';
 
 const DEFAULT_TEMPERATURE = 1.0;
-const DEFAULT_MAX_OUTPUT_TOKENS = 2048;
+const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 const DEFAULT_TOP_P = 0.95;
 const DEFAULT_TOP_K = 40;
 
@@ -233,7 +233,7 @@ export async function generateJson<T = Record<string, unknown>>(
           contents: prompt,
           config: {
             temperature: options.temperature ?? 0.1,
-            maxOutputTokens: options.maxOutputTokens ?? 1024,
+            maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
             responseMimeType: 'application/json',
             responseSchema: options.responseSchema,
             systemInstruction: options.systemInstruction,
