@@ -74,10 +74,8 @@ const SIGNATURE_TRIGGERS = [
     'Warm regards',
     'Sincerely',
     'Respectfully',
-    'All the best',
     'Thanks',
     'Thank you',
-    'With appreciation',
     // Portuguese
     'Atenciosamente',
     'Atencionalmente',
@@ -124,10 +122,18 @@ const SIGNATURE_TRIGGERS = [
     'Спасибо',
     // Common shorthand (shipping/logistics)
     'Tks',
+    'Thks',
     'B. Rgds',
+    'B.Rgds',
     'B rgds',
-    'Tks n rgds',
     'BRgds',
+    'Tks n rgds',
+    'Yours sincerely',
+    'Yours truly',
+    'Yours respectfully',
+    'Yours kindly',
+    'Yours faithfully',
+    'All the best',
     // Chinese
     '顺颂商祺',
     '祝好',
@@ -143,6 +149,7 @@ const SIGNATURE_NAMES = [
     'Excited to work on this',
     'Angelina Liu',
     'Parisi Grand Smooth Logistics Ltd.',
+    'With appreciation',
 ];
 
 const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
