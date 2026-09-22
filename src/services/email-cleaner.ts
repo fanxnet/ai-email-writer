@@ -209,7 +209,7 @@ function lineTriggerSignature(line: string): boolean {
     if (lowerLine.startsWith('dear ')) return false;
 
     const MAX_PREFIX = 2;
-    const MAX_TAIL_CHARS = 8;
+    const MAX_TAIL_CHARS = 5;
 
     // 1.普通单行问候关键词检测
     for (const keyword of SIGNATURE_TRIGGERS) {
@@ -234,7 +234,7 @@ function lineTriggerSignature(line: string): boolean {
         const nameLower = name.toLowerCase();
         if (lowerLine.startsWith(nameLower)) {
             const tailLength = trimmed.length - nameLower.length;
-            if (tailLength <= 6) {
+            if (tailLength <= MAX_TAIL_CHARS) {
                 return true;
             }
         }
