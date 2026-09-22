@@ -94,6 +94,7 @@ const SIGNATURE_TRIGGERS = [
     'Saludos atentos',
     'Muchas gracias',
     'Quedo atento',
+    'Cordial Saludo',
     // French
     'Cordialement',
     'Bien cordialement',
@@ -123,8 +124,8 @@ const SIGNATURE_TRIGGERS = [
     'Спасибо',
     // Common shorthand (shipping/logistics)
     'Tks',
-    'Tks and B. Rgds',
-    'Tks & B rgds',
+    'B. Rgds',
+    'B rgds',
     'Tks n rgds',
     'BRgds',
     // Chinese
@@ -138,6 +139,7 @@ const SIGNATURE_TRIGGERS = [
 const SIGNATURE_NAMES = [
     'Thank you so much',
     'Thank you very much',
+    'Thank you in advance',
     'Excited to work on this',
     'Angelina Liu',
     'Parisi Grand Smooth Logistics Ltd.',
