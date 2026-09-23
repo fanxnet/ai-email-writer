@@ -226,7 +226,7 @@ export function restoreFromHistory(key: string): { reply: string; options: Draft
         tone: record.lastRequest.tone || 'professional',
         includeOriginal: record.lastRequest.includeOriginal !== false,
         language: record.lastRequest.language || 'auto',
-        reasoningMode: (record.lastRequest.reasoningMode as ReasoningMode) || 'off',
+        reasoningMode: (record.lastRequest.reasoningMode as ReasoningMode) || 'fast',
         includeThread: record.lastRequest.includeThread === true,
         goalText: record.lastRequest.goalText,
       }
@@ -235,7 +235,7 @@ export function restoreFromHistory(key: string): { reply: string; options: Draft
         tone: 'professional',
         includeOriginal: true,
         language: 'auto',
-        reasoningMode: 'off',
+        reasoningMode: 'fast',
       };
 
   lastReply = reply;

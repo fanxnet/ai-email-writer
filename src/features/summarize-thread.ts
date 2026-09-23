@@ -186,11 +186,11 @@ function buildLengthStyleHint(length: SummaryLength, style: SummaryStyle): strin
 function getMaxTokensForLength(length: SummaryLength): number {
   switch (length) {
     case 'brief':
-      return 512;
+      return 1024;
     case 'detailed':
-      return 2048;
+      return 4096;
     case 'standard':
     default:
-      return 1024;
+      return 2048;
   }
 }

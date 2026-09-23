@@ -67,7 +67,7 @@ export async function extractActionItems(
 
   const raw = await generateText(prompt, {
     temperature: 0.2, // Low temperature for factual extraction
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
     onStream,
   });
 
