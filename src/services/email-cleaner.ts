@@ -108,8 +108,8 @@ const extraHeaderKeywords = [...HEADER_REMOVE_LIST]
     .join('|');
 const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${extraHeaderKeywords})\\s*[:：]`, 'i');
 
-// 主题行终止正则
-const subjectRx = /^\s*(subject|主题)\s*[:：]/i;
+// 主题行正则，多语种主题头：英/中/德/法/西/葡/意/俄/日/韩
+const subjectRx = /^\s*(subject|主题|betreff|objet|asunto|assunto|oggetto|тема|件名|제목)\s*[:：]/i;
 
 type MailBlock = {
     type: 'mail';
