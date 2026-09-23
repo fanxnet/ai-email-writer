@@ -70,12 +70,12 @@ export async function translateEmail(
   const { buildThreadBodyText, cleanThreadEmails } = await import('../services/email-cleaner');
   const { MIN_KEEP_REPLIES } = await import('../features/draft-reply');
   const emailBody = await cleanThreadEmails(buildThreadBodyText(body ?? '', MIN_KEEP_REPLIES),true);
-  if (!emailbody.trim()) {
+  if (!emailBody.trim()) {
     throw new Error('No email content found. Please open an email first.');
   }
 
   const prompt = buildPrompt(TRANSLATE_PROMPT, {
-    TEXT: emailbody,
+    TEXT: emailBody,
     TARGET_LANGUAGE: targetLanguage,
   });
 
@@ -86,7 +86,7 @@ export async function translateEmail(
   });
 
   lastResult = {
-    original: emailbody,
+    original: emailBody,
     translated,
     targetLanguage,
   };

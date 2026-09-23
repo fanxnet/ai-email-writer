@@ -75,7 +75,7 @@ export async function summarizeThread(
     const { buildThreadBodyText, cleanThreadEmails } = await import('../services/email-cleaner');
     const { MAX_KEEP_REPLIES } = await import('../features/draft-reply');
     const emailBody = await cleanThreadEmails(buildThreadBodyText(body ?? '', MAX_KEEP_REPLIES),true);
-    rawThread = `From: ${sender.name} <${sender.email}>\nSubject: ${subject}\n\n${emailbody}`;
+    rawThread = `From: ${sender.name} <${sender.email}>\nSubject: ${subject}\n\n${emailBody}`;
   }
 
   if (!rawThread.trim()) {
