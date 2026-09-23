@@ -262,7 +262,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
     let currentBlock: string[] | null = null;
-    const MAX_LOOK_AHEAD = 5; // 方案1：扫描窗口从3放宽至5
+    const MAX_LOOK_AHEAD = 5; // 扫描窗口从3放宽至5
 
     for (let i = 0; i < rawLines.length; i++) {
         const item = rawLines[i];
@@ -275,7 +275,7 @@ function splitMailBlocks(threadText: string): MailBlock[] {
         }
 
         if (isMailStartLine(textLine)) {
-            // 方案1+方案3并联：邮箱尖括号 或 连续头部字段，满足其一即判定有效邮件头
+            // 两种判定方式并联：邮箱尖括号 或 连续头部字段，满足其一即判定有效邮件头
             const isValidMailHeader =
                 peekHasEmailBracket(rawLines, i, MAX_LOOK_AHEAD) ||
                 peekHasHeaderPattern(rawLines, i, MAX_LOOK_AHEAD);
@@ -334,6 +334,38 @@ function compressBlankLines(text: string): string {
     return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
+/**
+ * 扫描主题续行：返回主题块的最后一行索引
+ * 用于处理长主题硬换行折行的场景，避免主题续行残留为正文尾巴
+ */
+function findSubjectEndIndex(
+    rawLines: Array<{ line: string, raw: string }>,
+    subjectStartIndex: number,
+    maxContinueLines: number = 3
+): number {
+    let endIndex = subjectStartIndex;
+    const scanEnd = Math.min(subjectStartIndex + maxContinueLines, rawLines.length - 1);
+    
+    for (let k = subjectStartIndex + 1; k <= scanEnd; k++) {
+        const line = rawLines[k].line.trim();
+        // 遇到空行、分隔线、新邮件头 → 主题结束
+        if (line === '' || isHorizontalRuleLine(rawLines[k].line) || isMailStartLine(rawLines[k].line)) {
+            break;
+        }
+        // 遇到正文问候语开头 → 主题结束
+        if (/^(hi|dear|hello|你好|您好|hi\s+|dear\s+)/i.test(line)) {
+            break;
+        }
+        // 包含冒号 → 大概率是下一个头部字段 → 主题结束
+        if (line.includes(':')) {
+            break;
+        }
+        // 符合续行特征，更新结束索引
+        endIndex = k;
+    }
+    return endIndex;
+}
+
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
     const blocks = splitMailBlocks(bodytext);
@@ -357,19 +389,22 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
 
         let foundSubjectWithinLimit = false;
         let subjectLineIndex = -1;
+        let subjectEndIndex = -1;
         if (fromIndex !== -1) {
             const scanEnd = Math.min(fromIndex + MAX_HEADER_LINES, rawLines.length - 1);
             for (let j = fromIndex + 1; j <= scanEnd; j++) {
                 if (subjectRx.test(rawLines[j].line)) {
                     foundSubjectWithinLimit = true;
                     subjectLineIndex = j;
+                    // 扩展扫描主题续行，得到主题块的最后一行
+                    subjectEndIndex = findSubjectEndIndex(rawLines, j);
                     break;
                 }
             }
         }
 
-        if (fromIndex !== -1 && foundSubjectWithinLimit && subjectLineIndex > fromIndex) {
-            // 优先分支：保留发件人行，发件人+1 ~ 主题行全部丢弃
+        if (fromIndex !== -1 && foundSubjectWithinLimit && subjectEndIndex > fromIndex) {
+            // 优先分支：保留发件人行，发件人+1 ~ 主题最后一行全部丢弃
             for (let j = 0; j < rawLines.length; j++) {
                 if (signatureHit) continue;
                 const item = rawLines[j];
@@ -377,8 +412,8 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
                     outLines.push(item.raw);
                     continue;
                 }
-                // 发件人与主题之间的头部直接跳过
-                if (j > fromIndex && j <= subjectLineIndex) {
+                // 发件人与主题结束之间的所有头部（含主题续行）全部跳过
+                if (j > fromIndex && j <= subjectEndIndex) {
                     continue;
                 }
                 // 正文区开始，执行签名过滤
