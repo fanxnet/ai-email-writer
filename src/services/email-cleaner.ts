@@ -111,6 +111,7 @@ const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${extraHeaderKeywords})\\s*[
 // 主题行正则，多语种主题头：英/中/德/法/西/葡/意/俄/日/韩
 const subjectRx = /^\s*(subject|主题|betreff|objet|asunto|assunto|oggetto|тема|件名|제목)\s*[:：]/i;
 
+
 type MailBlock = {
     type: 'mail';
     text: string;
@@ -345,7 +346,7 @@ function findSubjectEndIndex(
 ): number {
     let endIndex = subjectStartIndex;
     const scanEnd = Math.min(subjectStartIndex + maxContinueLines, rawLines.length - 1);
-    
+
     for (let k = subjectStartIndex + 1; k <= scanEnd; k++) {
         const line = rawLines[k].line.trim();
         // 遇到空行、分隔线、新邮件头 → 主题结束
@@ -393,12 +394,23 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         if (fromIndex !== -1) {
             const scanEnd = Math.min(fromIndex + MAX_HEADER_LINES, rawLines.length - 1);
             for (let j = fromIndex + 1; j <= scanEnd; j++) {
+                // 原有单行匹配
                 if (subjectRx.test(rawLines[j].line)) {
                     foundSubjectWithinLimit = true;
                     subjectLineIndex = j;
-                    // 扩展扫描主题续行，得到主题块的最后一行
                     subjectEndIndex = findSubjectEndIndex(rawLines, j);
                     break;
+                }
+                // 新增：相邻两行拼接，处理单词被换行打断场景（Assun\nto:）
+                const nextJ = j + 1;
+                if(nextJ <= scanEnd){
+                    const combined = rawLines[j].line.trim() + rawLines[nextJ].line.trim();
+                    if(subjectRx.test(combined)){
+                        foundSubjectWithinLimit = true;
+                        subjectLineIndex = j; // 主题起始行是当前j（Assun那一行）
+                        subjectEndIndex = findSubjectEndIndex(rawLines, nextJ);
+                        break;
+                    }
                 }
             }
         }
@@ -412,7 +424,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
                     outLines.push(item.raw);
                     continue;
                 }
-                // 发件人与主题结束之间的所有头部（含主题续行）全部跳过
+                // 发件人与主题结束之间的所有头部（含主题断字跨行、主题续行）全部跳过
                 if (j > fromIndex && j <= subjectEndIndex) {
                     continue;
                 }
