@@ -370,43 +370,82 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         const outLines: string[] = [];
         let signatureHit = false;
 
+        // ========== 新增：跨行header预合并，用于header识别判断，不修改输出原文 ==========
+        type MergedLineItem = {
+            originalIndices: number[], // 对应rawLines下标
+            combinedText: string,      // 拼接后的文本，用于header检测
+        };
+        const mergedForDetect: MergedLineItem[] = [];
+        let j = 0;
+        while (j < rawLines.length) {
+            const currLine = rawLines[j].line.trimEnd();
+            // 如果当前行末尾无冒号，并且下一行存在，尝试拼接
+            if (j + 1 < rawLines.length && !currLine.includes(':')) {
+                const nextLine = rawLines[j + 1].line.trimStart();
+                const combined = currLine + nextLine;
+                // 拼接后命中header关键词，则合并
+                if (HEADER_REMOVE_LIST.some(h => combined.toLowerCase().startsWith(h.toLowerCase()))) {
+                    mergedForDetect.push({
+                        originalIndices: [j, j + 1],
+                        combinedText: combined
+                    });
+                    j += 2;
+                    continue;
+                }
+            }
+            // 不满足合并，单行保留
+            mergedForDetect.push({
+                originalIndices: [j],
+                combinedText: rawLines[j].line
+            });
+            j += 1;
+        }
+        // ========== 跨行header预合并结束 ==========
+
+
         // ---------- 优先路径：扫描From/发件人 → Subject/主题，最多向后20行 ----------
         let fromIndex = -1;
-        for(let j=0;j<rawLines.length;j++){
-            if(isMailStartLine(rawLines[j].line)){
-                fromIndex = j;
+        // 遍历合并后的行找From
+        for(let mj=0;mj<mergedForDetect.length;mj++){
+            if(isMailStartLine(mergedForDetect[mj].combinedText)){
+                fromIndex = mj;
                 break;
             }
         }
-
         let foundSubjectWithinLimit = false;
-        let subjectLineIndex = -1;
+        let subjectMergedIndex = -1;
         if(fromIndex !== -1){
-            // 在发件人行之后最多扫描20行查找主题标记
-            const scanEnd = Math.min(fromIndex + MAX_HEADER_LINES, rawLines.length - 1);
-            for(let j = fromIndex + 1; j <= scanEnd; j++){
-                if(subjectRx.test(rawLines[j].line)){
+            const scanEnd = Math.min(fromIndex + MAX_HEADER_LINES, mergedForDetect.length - 1);
+            for(let mj = fromIndex + 1; mj <= scanEnd; mj++){
+                if(subjectRx.test(mergedForDetect[mj].combinedText)){
                     foundSubjectWithinLimit = true;
-                    subjectLineIndex = j;
+                    subjectMergedIndex = mj;
                     break;
                 }
             }
         }
 
-        if(fromIndex !== -1 && foundSubjectWithinLimit && subjectLineIndex > fromIndex){
-            // 优先分支生效：保留发件人行，发件人+1 ~ 主题行全部丢弃
-            for(let j=0;j<rawLines.length;j++){
+        if(fromIndex !== -1 && foundSubjectWithinLimit && subjectMergedIndex > fromIndex){
+            // 优先分支：使用mergedForDetect判断哪些原始行要跳过
+            const skipRawIndexSet = new Set<number>();
+            for(let mj = fromIndex +1; mj <= subjectMergedIndex; mj++){
+                for(const rawIdx of mergedForDetect[mj].originalIndices){
+                    skipRawIndexSet.add(rawIdx);
+                }
+            }
+            const fromRawIdx = mergedForDetect[fromIndex].originalIndices[0];
+
+            for(let rIdx=0;rIdx<rawLines.length;rIdx++){
                 if(signatureHit) continue;
-                const item = rawLines[j];
-                if(j === fromIndex){
+                const item = rawLines[rIdx];
+                if(rIdx === fromRawIdx){
                     outLines.push(item.raw);
                     continue;
                 }
-                // 发件人与主题之间的头部直接跳过
-                if(j > fromIndex && j <= subjectLineIndex){
+                if(skipRawIndexSet.has(rIdx)){
                     continue;
                 }
-                // 正文区开始，执行签名过滤
+                // 正文区，签名过滤
                 if (removeSignature && lineTriggerSignature(item.line)) {
                     signatureHit = true;
                     continue;
@@ -414,43 +453,67 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
                 outLines.push(item.raw);
             }
         }else{
-            // ---------- 兜底降级：原有insideHeaderBlock方案 ----------
+            // ---------- 兜底降级：原有insideHeaderBlock方案，改成基于mergedForDetect识别header ----------
             let insideHeaderBlock = false;
             let headerLineCount = 0;
-            for (const item of rawLines) {
-                if (signatureHit) continue;
-                const line = item.line;
+            let rawPtr = 0;
+            for (const mItem of mergedForDetect) {
+                if (signatureHit) break;
+                const detectLine = mItem.combinedText;
+                const rawIndices = mItem.originalIndices;
+                const firstRawIdx = rawIndices[0];
                 if (insideHeaderBlock) {
                     headerLineCount++;
-                    if (subjectRx.test(line)) {
+                    if (subjectRx.test(detectLine)) {
                         insideHeaderBlock = false;
                         headerLineCount = 0;
+                        // 这个合并行包含subject，全部原始行跳过
+                        rawPtr += rawIndices.length;
                         continue;
                     }
-                    if (line.trim() === '' || isHorizontalRuleLine(line) || headerLineCount >= MAX_HEADER_LINES) {
+                    const trimmed = detectLine.trim();
+                    if (trimmed === '' || isHorizontalRuleLine(detectLine) || headerLineCount >= MAX_HEADER_LINES) {
                         insideHeaderBlock = false;
                         headerLineCount = 0;
-                        outLines.push(item.raw);
+                        // 退出header块，把当前行全部推入输出
+                        for(const ri of rawIndices){
+                            outLines.push(rawLines[ri].raw);
+                        }
+                        rawPtr += rawIndices.length;
                         continue;
                     }
+                    // header内部，跳过
+                    rawPtr += rawIndices.length;
                     continue;
                 }
-                if (isMailStartLine(line)) {
-                    outLines.push(item.raw);
+                if (isMailStartLine(detectLine)) {
+                    // From行，全部原始行保留
+                    for(const ri of rawIndices){
+                        outLines.push(rawLines[ri].raw);
+                    }
+                    rawPtr += rawIndices.length;
                     continue;
                 }
-                if (isExtraHeaderLine(line)) {
+                if (isExtraHeaderLine(detectLine)) {
                     insideHeaderBlock = true;
                     headerLineCount = 1;
+                    rawPtr += rawIndices.length;
                     continue;
                 }
-                if (removeSignature && lineTriggerSignature(line)) {
-                    signatureHit = true;
-                    continue;
+                // 正文，签名检测按原始单行
+                for(const ri of rawIndices){
+                    if(signatureHit) break;
+                    const item = rawLines[ri];
+                    if (removeSignature && lineTriggerSignature(item.line)) {
+                        signatureHit = true;
+                        continue;
+                    }
+                    outLines.push(item.raw);
                 }
-                outLines.push(item.raw);
+                rawPtr += rawIndices.length;
             }
         }
+
 
         let blockContent = outLines.length ? outLines.join('') : block.text;
         if (i > 0) {

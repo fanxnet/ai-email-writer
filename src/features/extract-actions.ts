@@ -53,13 +53,14 @@ export async function extractActionItems(
   onStream?: (delta: string) => void,
 ): Promise<ActionItem[]> {
   const rawContent = await readEmailContent();
-
-  if (!rawContent.trim()) {
+  const { buildThreadBodyText, cleanThreadEmails } = await import('../services/email-cleaner');
+  const { MAX_KEEP_REPLIES } = await import('../features/draft-reply');
+  const emailBody = await cleanThreadEmails(buildThreadBodyText(rawContent ?? '', MAX_KEEP_REPLIES),true);
+  if (!emailBody.trim()) {
     throw new Error('No email content found. Please open an email first.');
   }
 
-  const emailContent = truncateContext(rawContent, MAX_CONTENT_TOKENS);
-
+  const emailContent = truncateContext(emailBody, MAX_CONTENT_TOKENS);
   const prompt = buildPrompt(EXTRACT_ACTION_ITEMS_PROMPT, {
     EMAIL_CONTENT: emailContent,
   });

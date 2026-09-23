@@ -67,13 +67,15 @@ export async function translateEmail(
   onStream?: (delta: string) => void,
 ): Promise<TranslateResult> {
   const body = await getCurrentEmailBody();
-
-  if (!body.trim()) {
+  const { buildThreadBodyText, cleanThreadEmails } = await import('../services/email-cleaner');
+  const { MIN_KEEP_REPLIES } = await import('../features/draft-reply');
+  const emailBody = await cleanThreadEmails(buildThreadBodyText(body ?? '', MIN_KEEP_REPLIES),true);
+  if (!emailbody.trim()) {
     throw new Error('No email content found. Please open an email first.');
   }
 
   const prompt = buildPrompt(TRANSLATE_PROMPT, {
-    TEXT: body,
+    TEXT: emailbody,
     TARGET_LANGUAGE: targetLanguage,
   });
 
@@ -84,7 +86,7 @@ export async function translateEmail(
   });
 
   lastResult = {
-    original: body,
+    original: emailbody,
     translated,
     targetLanguage,
   };
