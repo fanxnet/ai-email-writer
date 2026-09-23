@@ -1,146 +1,70 @@
-// ============================================================
-// 头部关键词语义表：加语言只需改这里
-// ============================================================
+const THREAD_BLOCK_STARTERS = [
+    // English
+    'From:',
+    'From :',
+    'Sender:',
+    'Sender :',
+    // German
+    'Von:',
+    'Von :',
+    // Spanish
+    'De:',
+    'De :',
+    'Remitente:',
+    'Remitente :',
+    // French
+    'Expéditeur:',
+    'Expéditeur :',
+    'De:',
+    'De :',
+    // Portuguese
+    'Remetente:',
+    'Remetente :',
+    'De:',
+    'De :',
+    // Italian
+    'Mittente:',
+    'Mittente :',
+    'Da:',
+    'Da :',
+    // Korean
+    '보낸 사람:',
+    '보낸 사람 :',
+    '보낸사람:',
+    '보낸사람 :',
+    // Japanese
+    '差出人：',
+    '差出人:',
+    '送信者：',
+    '送信者:',
+    // Chinese (Simplified)
+    '发件人：',
+    '发件人:',
+    '来自：',
+    '寄件人：',
+    // Chinese (Traditional / Taiwan)
+    '寄件者：',
+    '寄件者:',
+    // Russian
+    'От:',
+    'От :',
+    'От кого:',
+    'От кого :',
+];
 
-type HeaderKind = 'from' | 'subject' | 'to' | 'cc' | 'date';
-
-const HEADER_TABLE: Record<HeaderKind, string[]> = {
-    from: [
-        // English
-        'From', 'Sender',
-        // German
-        'Von',
-        // Spanish / French / Portuguese (De 通用)
-        'De', 'Remitente', 'Expéditeur', 'Remetente',
-        // Italian
-        'Mittente', 'Da',
-        // Korean
-        '보낸 사람', '보낸사람',
-        // Japanese
-        '差出人', '送信者',
-        // Chinese (Simplified / Traditional)
-        '发件人', '来自', '寄件人', '寄件者',
-        // Russian
-        'От', 'От кого',
-    ],
-    subject: [
-        'Subject',
-        'Betreff',
-        'Objet',
-        'Asunto',
-        'Assunto',
-        'Oggetto',
-        'Тема',
-        '件名',
-        '제목',
-        '主题',
-    ],
-    to: [
-        'To', 'An', 'À', 'Para', 'A',
-        'Кому', '宛先', '받는 사람', '收件人',
-    ],
-    cc: [
-        'Cc', 'Kopie', 'Cópia', 'Копия', '참조', '抄送',
-    ],
-    date: [
-        'Date', 'Datum', 'Fecha', 'Data', 'Дата',
-        '日付', '날짜', '日期',
-        'Sent', 'Envoyé', 'Gesendet', 'Enviada em',
-    ],
-};
-
-const HEADER_KINDS: HeaderKind[] = ['from', 'subject', 'to', 'cc', 'date'];
-
-// ============================================================
-// 正则构建
-// ============================================================
-
-function escapeRegExp(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// 半角 + 全角冒号，且允许 keyword 与冒号之间存在空白
-function buildHeaderRegex(items: string[]): RegExp {
-    const alt = items.map(escapeRegExp).join('|');
-    return new RegExp(`^[\\s\\u00A0]*(?:${alt})[\\s\\u00A0]*[:：]`, 'i');
-}
-
-const HEADER_RX: Record<HeaderKind, RegExp> = {
-    from:    buildHeaderRegex(HEADER_TABLE.from),
-    subject: buildHeaderRegex(HEADER_TABLE.subject),
-    to:      buildHeaderRegex(HEADER_TABLE.to),
-    cc:      buildHeaderRegex(HEADER_TABLE.cc),
-    date:    buildHeaderRegex(HEADER_TABLE.date),
-};
-
-function classifyHeader(line: string): HeaderKind | null {
-    for (const kind of HEADER_KINDS) {
-        if (HEADER_RX[kind].test(line)) return kind;
-    }
-    return null;
-}
-
-function isMailStartLine(line: string): boolean {
-    return HEADER_RX.from.test(line);
-}
-
-// ============================================================
-// 关键新增：折叠行 header 识别
-// 处理形如：
-//   Assun
-//   to: RE: xxx
-// 或
-//   Subject
-//   : hello
-// 这类被邮件客户端拆断的字段名
-// ============================================================
-
-type HeaderHit = {
-    kind: HeaderKind;
-    /** 本次命中共消费了多少个原始行（1 或 2） */
-    consumed: number;
-};
-
-function peekJoinHeader(
-    lines: Array<{ line: string; raw: string }>,
-    i: number
-): HeaderHit | null {
-    const cur = lines[i].line;
-
-    // 1) 单行直接命中
-    const k0 = classifyHeader(cur);
-    if (k0) return { kind: k0, consumed: 1 };
-
-    // 2) 尝试与下一行拼接
-    if (i + 1 >= lines.length) return null;
-
-    const next = lines[i + 1].line;
-
-    // 避免把两行正文误拼成 header：要求当前行不含冒号、非空；
-    // 下一行也不能是完全空白
-    if (cur.trim().length === 0) return null;
-    if (next.trim().length === 0) return null;
-    // 如果当前行本身已经含冒号，说明它自成一个（可能是其它 header 或正文），
-    // 不再尝试与下一行拼接
-    if (/[:：]/.test(cur)) return null;
-
-    // 2a) 无空格直接拼接："Assun" + "to:" = "Assunto:"
-    const joined = cur + next;
-    const kj = classifyHeader(joined);
-    if (kj) return { kind: kj, consumed: 2 };
-
-    // 2b) 中间加空格拼接（少数客户端会在折行处留一个空格的等价物）
-    const joinedSpace = cur + ' ' + next;
-    const ks = classifyHeader(joinedSpace);
-    if (ks) return { kind: ks, consumed: 2 };
-
-    return null;
-}
-
-// ============================================================
-// 签名触发词 / 姓名
-// ============================================================
-
+const HEADER_REMOVE_LIST = [
+    'Subject:', 'To:', 'Cc:', 'Sent:', 'Date:',
+    'Betreff:', 'An:', 'Kopie:', 'Gesendet:', 'Datum:',
+    'Objet :', 'À :', 'Cc :', 'Envoyé :', 'Date :',
+    'Asunto:', 'Para:', 'Copia:', 'Enviado:', 'Fecha:',
+    'Assunto:', 'Para:', 'Cópia:', 'Enviado:', 'Data:',
+    'Oggetto:', 'A:', 'Cc:', 'Inviato:', 'Data:',
+    'Тема:', 'Кому:', 'Копия:', 'Отправлено:', 'Дата:',
+    '件名：', '宛先：', 'Cc：', '送信日時：', '日付：',
+    '제목:', '받는 사람:', '참조:', '보낸 시간:', '날짜:',
+    '主题：', '主题:', '收件人：', '收件人:', '抄送：', '抄送:', '发送时间：', '发送时间:', '日期：', '日期:',
+    'Enviada em:'
+];
 const SIGNATURE_TRIGGERS = [
     // English
     'Best regards',
@@ -217,6 +141,7 @@ const SIGNATURE_TRIGGERS = [
     '敬礼',
 ];
 
+
 const SIGNATURE_NAMES = [
     'Thank you so much',
     'Thank you very much',
@@ -227,10 +152,43 @@ const SIGNATURE_NAMES = [
     'With appreciation',
 ];
 
-// 不排序；/i 忽略大小写
-const salutePattern = SIGNATURE_TRIGGERS.map(escapeRegExp).join('|');
+const starterKeywords = THREAD_BLOCK_STARTERS.map(s=>escapeRegExp(s)).join('|');
+const mailStartRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})`, 'i');
 
-// 复合链式签名：关键词 (/|&|,|and|\|) 关键词
+const extraHeaderRxItems = HEADER_REMOVE_LIST.filter(item => item !== 'Expéditeur :')
+    .map(s => escapeRegExp(s));
+extraHeaderRxItems.unshift('Expéditeur\\s*:');
+const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(${extraHeaderRxItems.join('|')})`, 'i');
+
+
+type MailBlock = {
+    type: 'mail';
+    text: string;
+};
+function isMailStartLine(line: string): boolean {
+    return mailStartRx.test(line);
+}
+function isExtraHeaderLine(line: string): boolean {
+    return extraHeaderRegex.test(line);
+}
+
+function escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 不排序；/i 负责忽略大小写匹配
+const salutePattern = SIGNATURE_TRIGGERS
+    .map(escapeRegExp)
+    .join('|');
+
+/*/ 长词优先排序，防止短词抢先匹配长词组
+const salutePattern = [...SIGNATURE_TRIGGERS]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join('|');
+*/
+// 关键修复：移除末尾 $ 行尾锚点！
+// 只要存在一对 关键词 (/ & , and | 分隔符)关键词，后面还可以有更多链式内容
 const multiSaluteRx = new RegExp(
     `(${salutePattern})\\s*(?:\\/|&|,|and|\\|)\\s*(${salutePattern})\\s*[,.!~;]*`,
     'i'
@@ -251,7 +209,7 @@ function lineTriggerSignature(line: string): boolean {
     const MAX_PREFIX = 2;
     const MAX_TAIL_CHARS = 5;
 
-    // 1. 单行问候关键词
+    // 1.普通单行问候关键词检测
     for (const keyword of SIGNATURE_TRIGGERS) {
         const kw = keyword.toLowerCase();
         const pos = lowerLine.indexOf(kw);
@@ -264,12 +222,12 @@ function lineTriggerSignature(line: string): boolean {
         }
     }
 
-    // 2. 复合链式签名
+    // 2.复合链式签名：2个关键词由 / 或 & 隔开即命中
     if (multiSaluteRx.test(lowerLine)) {
         return true;
     }
 
-    // 3. 人名签名（严格行首）
+    // 3.人名签名：严格行首匹配
     for (const name of SIGNATURE_NAMES) {
         const nameLower = name.toLowerCase();
         if (lowerLine.startsWith(nameLower)) {
@@ -283,18 +241,14 @@ function lineTriggerSignature(line: string): boolean {
     return false;
 }
 
-// ============================================================
-// 基础工具
-// ============================================================
-
 function isHorizontalRuleLine(line: string): boolean {
     const trimmed = line.trim();
-    if (trimmed.length < 5) return false;
+    if(trimmed.length < 5) return false;
     const firstChar = trimmed[0];
-    if (!['-', '=', '_', '—', '―', '~'].includes(firstChar)) return false;
+    if(!['-','=','_','—','―','~'].includes(firstChar)) return false;
     let sameCount = 0;
-    for (const ch of trimmed) {
-        if (ch === firstChar) sameCount++;
+    for(const ch of trimmed){
+        if(ch === firstChar) sameCount++;
     }
     return sameCount / trimmed.length >= 0.9;
 }
@@ -321,47 +275,50 @@ function splitPreserveNewline(text: string): Array<{ line: string; raw: string }
     return result;
 }
 
-// 判定 From 是否像一封真实的邮件头：向后 N 行内出现邮箱线索（<...> 或 @）
-function looksLikeMailHeader(
-    lines: Array<{ line: string; raw: string }>,
-    currentIndex: number,
-    lookAheadMax: number
-): boolean {
-    for (let i = 0; i <= lookAheadMax; i++) {
+function peekHasEmailBracket(lines:Array<{line:string,raw:string}>, currentIndex:number, lookAheadMax:number):boolean{
+    for(let i = 0; i <= lookAheadMax; i++){
         const idx = currentIndex + i;
-        if (idx >= lines.length) break;
-        const l = lines[idx].line;
-        if (l.includes('@') || l.includes('<')) return true;
+        if(idx >= lines.length) break;
+        if(lines[idx].line.includes('<')){
+            return true;
+        }
     }
     return false;
 }
 
-// ============================================================
-// 邮件块切分
-// ============================================================
-
-type MailBlock = {
-    type: 'mail';
-    text: string;
-};
-
 function splitMailBlocks(threadText: string): MailBlock[] {
+    console.debug('[splitMailBlocks] input length:', threadText.length);
     const rawLines = splitPreserveNewline(threadText);
     const blocks: string[][] = [];
     let currentBlock: string[] | null = null;
-    const MAX_LOOK_AHEAD = 5;
+    const MAX_LOOK_AHEAD = 3;
 
     for (let i = 0; i < rawLines.length; i++) {
         const item = rawLines[i];
         const textLine = item.line;
 
-        if (isMailStartLine(textLine) &&
-            looksLikeMailHeader(rawLines, i, MAX_LOOK_AHEAD)) {
-            if (currentBlock !== null && currentBlock.length > 0) {
-                blocks.push(currentBlock);
-            }
-            currentBlock = [item.raw];
+        if (isHorizontalRuleLine(textLine)) {
+            if (currentBlock === null) currentBlock = [];
+            currentBlock.push(item.raw);
             continue;
+        }
+
+        if (isMailStartLine(textLine)) {
+            const isValidMailHeader = peekHasEmailBracket(rawLines, i, MAX_LOOK_AHEAD);
+            if(isValidMailHeader){
+                if (currentBlock !== null && currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                }
+                currentBlock = [item.raw];
+                continue;
+            }else{
+                if (currentBlock === null) {
+                    currentBlock = [item.raw];
+                } else {
+                    currentBlock.push(item.raw);
+                }
+                continue;
+            }
         }
 
         if (currentBlock === null) {
@@ -374,118 +331,116 @@ function splitMailBlocks(threadText: string): MailBlock[] {
     if (currentBlock !== null && currentBlock.length > 0) {
         blocks.push(currentBlock);
     }
-
     const result: MailBlock[] = blocks
         .map(b => b.join(''))
         .filter(mailText => mailText.trim().length > 0)
         .map(text => ({ type: 'mail', text }));
-
     if (result.length === 0 && threadText.trim().length > 0) {
+        console.debug('[splitMailBlocks] fallback-all-to-mail');
         result.push({ type: 'mail', text: threadText });
     }
+    console.debug('[splitMailBlocks] blocks count =', result.length);
     return result;
 }
 
-// ============================================================
-// 单块清洗（状态机 + 折叠行识别）
-// ============================================================
-
-const MAX_HEADER_LINES = 20;
-
-/**
- * 头部区只保留 From 行，其余 Header（Subject/To/Cc/Date/...）一律丢弃。
- * 支持被邮件客户端拆断的字段名，例如：
- *     Assun
- *     to: RE: xxx
- * 遇到 Subject 或第一个非 Header 行即进入正文；正文区可选做签名过滤。
- */
-function cleanOneBlock(blockText: string, removeSignature: boolean): string {
-    const rawLines = splitPreserveNewline(blockText);
-    const out: string[] = [];
-    let state: 'scan' | 'header' | 'body' = 'scan';
-    let headerLineCount = 0;
-    let signatureHit = false;
-
-    let i = 0;
-    while (i < rawLines.length) {
-        const item = rawLines[i];
-        const { line, raw } = item;
-
-        if (signatureHit) {
-            i++;
-            continue;
-        }
-
-        // ---------- scan ----------
-        if (state === 'scan') {
-            const hit = peekJoinHeader(rawLines, i);
-            if (hit && hit.kind === 'from') {
-                for (let k = 0; k < hit.consumed; k++) {
-                    out.push(rawLines[i + k].raw);
-                }
-                i += hit.consumed;
-                state = 'header';
-                headerLineCount = 1;
-                continue;
-            }
-            // 不是 from 头，正常输出
-            out.push(raw);
-            i++;
-            continue;
-        }
-
-        // ---------- header ----------
-        if (state === 'header') {
-            const hit = peekJoinHeader(rawLines, i);
-
-            if (hit && hit.kind === 'from') {
-                for (let k = 0; k < hit.consumed; k++) {
-                    out.push(rawLines[i + k].raw);
-                }
-                i += hit.consumed;
-                headerLineCount++;
-                continue;
-            }
-
-            if (hit && hit.kind === 'subject') {
-                // Subject 出现 = 头部结束，该行及其续行全部丢弃
-                i += hit.consumed;
-                state = 'body';
-                continue;
-            }
-
-            if (hit) {
-                // 其它 header 一律丢弃（含 Data / Para / Cc ...）
-                i += hit.consumed;
-                headerLineCount++;
-                if (headerLineCount > MAX_HEADER_LINES) {
-                    // 兜底：头部过长，退出 header 状态；但不输出当前行
-                    state = 'body';
-                }
-                continue;
-            }
-
-            // 当前行不是 header：进入正文，本行按正文规则处理
-            state = 'body';
-            // 不 continue，让下方 body 分支处理这一行
-        }
-
-        // ---------- body ----------
-        if (removeSignature && lineTriggerSignature(line)) {
-            signatureHit = true;
-            i++;
-            continue;
-        }
-        out.push(raw);
-        i++;
-    }
-
-    return out.join('');
+function compressBlankLines(text: string): string {
+    return text.replace(/(\r?\n)(\s*\1)+/g, '$1$1');
 }
 
-// ============================================================
-// 对外 API
-// ============================================================
+function isTechnicalHeaderLine(line: string): boolean {
+    const trimmed = line.trim();
+    return /^(Reply-To|Bcc|Message-ID|MIME-Version|Content-Type|Content-Transfer-Encoding|References|In-Reply-To|Return-Path|Delivered-To|Auto-Submitted|X-[\w-]+)\s*[:：]/i.test(trimmed);
+}
+
+function isHeaderContinuation(line: string): boolean {
+    return /^[ \t]+\S/.test(line);
+}
+
+/**
+ * Header rule:
+ * - keep From / equivalent sender line
+ * - remove To / Cc / Sent / Subject / Date and known technical headers
+ * - remove folded continuation lines belonging to a removed header
+ * - Subject is NOT required as the end marker
+ */
+function cleanMailHeaderLines(
+    rawLines: Array<{ line: string; raw: string }>
+): Array<{ line: string; raw: string }> {
+    const outLines: Array<{ line: string; raw: string }> = [];
+    let fromFound = false;
+    let insideHeader = false;
+    let removingFoldedHeader = false;
+    let headerLineCount = 0;
+    const MAX_HEADER_LINES = 20;
+
+    for (let i = 0; i < rawLines.length; i++) {
+        const item = rawLines[i];
+        const line = item.line;
+        const trimmed = line.trim();
+
+        // Keep the sender line only.
+        if (isMailStartLine(line) && !fromFound) {
+            outLines.push(item);
+            fromFound = true;
+            insideHeader = true;
+            removingFoldedHeader = false;
+            headerLineCount = 0;
+            continue;
+        }
+
+        if (fromFound && insideHeader) {
+            // Empty line is the normal end of the mail header.
+            if (trimmed === '') {
+                insideHeader = false;
+                removingFoldedHeader = false;
+                outLines.push(item);
+                continue;
+            }
+
+            // Remove known visible headers: To / Cc / Sent / Subject / Date...
+            if (isExtraHeaderLine(line) || isTechnicalHeaderLine(line)) {
+                headerLineCount++;
+                // If there is no value after ':' the next indented line can be
+                // a folded continuation of this header.
+                // Any immediately following indented line belongs to this header.
+                removingFoldedHeader = true;
+                continue;
+            }
+
+            // Remove folded continuation lines of a removed header.
+            if (removingFoldedHeader && isHeaderContinuation(line)) {
+                headerLineCount++;
+                continue;
+            }
+
+            // Some clients wrap a header value without indentation, e.g.
+            // Subject:\nRE: Project Cargo
+            if (
+                removingFoldedHeader &&
+                headerLineCount < MAX_HEADER_LINES &&
+                !isMailStartLine(line) &&
+                !isExtraHeaderLine(line) &&
+                !isTechnicalHeaderLine(line)
+            ) {
+                removingFoldedHeader = false;
+                insideHeader = false;
+                // The current line is treated as body below.
+            } else if (headerLineCount >= MAX_HEADER_LINES) {
+                insideHeader = false;
+                removingFoldedHeader = false;
+            } else {
+                // First normal non-header line marks the body start.
+                insideHeader = false;
+                removingFoldedHeader = false;
+            }
+        }
+
+        // Body: preserve text and let the existing signature logic handle it.
+        outLines.push(item);
+    }
+
+    return outLines;
+}
 
 export function buildThreadBodyText(bodytext: string, keepReplies: number): string {
     const blocks = splitMailBlocks(bodytext);
@@ -496,27 +451,44 @@ export function buildThreadBodyText(bodytext: string, keepReplies: number): stri
     return selectedMails.map(b => b.text).join('');
 }
 
-function compressBlankLines(text: string): string {
-    // 之前用 \s 会吞正文，这里只压缩连续的换行
-    return text.replace(/(?:\r?\n){3,}/g, '\n\n');
-}
-
 export function cleanThreadEmails(bodytext: string, removeSignature = true): string {
     if (!bodytext) return bodytext;
+
     const blocks = splitMailBlocks(bodytext);
+    if (blocks.length === 0) return bodytext;
+
     const cleaned: string[] = [];
 
     for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
-        let blockContent = cleanOneBlock(block.text, removeSignature);
-        if (!blockContent) blockContent = block.text;
+        const rawLines = splitPreserveNewline(block.text);
+        const headerCleaned = cleanMailHeaderLines(rawLines);
+        const outLines: string[] = [];
+        let signatureHit = false;
+
+        // Existing signature removal behavior is preserved after header cleanup.
+        for (const item of headerCleaned) {
+            if (signatureHit) break;
+
+            if (removeSignature && lineTriggerSignature(item.line)) {
+                signatureHit = true;
+                continue;
+            }
+
+            outLines.push(item.raw);
+        }
+
+        // Important: do not restore block.text here, otherwise removed headers
+        // could come back when the cleaned result is empty.
+        let blockContent = outLines.join('');
 
         if (i > 0) {
             const mailNumber = i + 1;
             const separator = `\n--MAIL SPLIT MARKER-- #${mailNumber}\n`;
             blockContent = separator + blockContent;
         }
-        blockContent += '\n';
+
+        blockContent += "\n";
         blockContent = compressBlankLines(blockContent);
         cleaned.push(blockContent);
     }
@@ -524,3 +496,4 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
     const finalResult = cleaned.join('');
     return finalResult.length ? finalResult : bodytext;
 }
+
