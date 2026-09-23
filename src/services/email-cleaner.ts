@@ -69,7 +69,7 @@ const SIGNATURE_TRIGGERS = [
     'Atenciosamente', 'Atencionalmente', 'Saudações', 'Obrigado', 'Cordialmente', 'Grato', 'Grata',
     // Spanish
     'Saludos', 'Saludos cordiales', 'Un cordial saludo', 'Atentamente', 'Saludos atentos',
-    'Muchas gracias', 'Quedo atento', 'Cordial Saludo',
+    'Muchas gracias', 'Quedo atento', 
     // French
     'Cordialement', 'Bien cordialement', 'Bien à vous', 'Respectueusement',
     'Avec mes salutations distinguées', 'Merci',
@@ -99,7 +99,7 @@ const SIGNATURE_NAMES = [
     'Angelina Liu',
     'Parisi Grand Smooth Logistics Ltd.',
     'With appreciation',
-    'Best regard'
+    'Best regard','Cordial Saludo',
 ];
 
 // ============================================================
