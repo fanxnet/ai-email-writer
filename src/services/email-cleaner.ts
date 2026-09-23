@@ -99,6 +99,7 @@ const SIGNATURE_NAMES = [
     'Angelina Liu',
     'Parisi Grand Smooth Logistics Ltd.',
     'With appreciation',
+    'Best regard'
 ];
 
 // ============================================================
@@ -459,8 +460,9 @@ function cleanOneMailBlock(
             const line = rawLines[i].line;
             const trimmed = line.trim();
 
-            // 头部字段之间允许有空行，不作为头部结束
+            // 空行：结束"待续行"状态，header 模式下继续跳过
             if (trimmed === '') {
+                pendingWrappedHeader = false;      // ★ 改动 ①
                 continue;
             }
 
@@ -469,19 +471,26 @@ function cleanOneMailBlock(
             if (headerSpan > 0) {
                 headerLineCount += headerSpan;
                 afterRemovableHeader = true;
+
                 const logicalHeader = rawLines
                     .slice(i, i + headerSpan)
                     .map(x => x.line)
                     .join('');
+
                 const headerValue = logicalHeader
                     .replace(/^[^:：]*[:：]/, '')
                     .trim();
-                pendingWrappedHeader = /[,;\/-]$/.test(headerValue);
+
+                // ★ 改动 ②：值为空也算"待续行"
+                pendingWrappedHeader =
+                    headerValue === '' ||
+                    /[,;\/-]$/.test(headerValue);
+
                 i += headerSpan - 1;
                 continue;
             }
 
-            // 折行续行（被移除 header 的延续）
+            // 折行续行
             if (
                 afterRemovableHeader &&
                 (
@@ -491,11 +500,11 @@ function cleanOneMailBlock(
                 )
             ) {
                 headerLineCount++;
-                pendingWrappedHeader = /[,;\/-]$/.test(trimmed);
+                // ★ 改动 ③：不再重置 pendingWrappedHeader，
+                //   让它一直吞到空行或 From 行
                 continue;
             }
 
-            // 又遇到一个 From 行：保留（不吞掉）
             if (
                 isMailStartLine(line) &&
                 looksLikeRealMailStart(rawLines, i, 5)
@@ -510,7 +519,6 @@ function cleanOneMailBlock(
                 continue;
             }
 
-            // 第一个非 header 非空行 = 正文开始
             inHeader = false;
             afterRemovableHeader = false;
             pendingWrappedHeader = false;
