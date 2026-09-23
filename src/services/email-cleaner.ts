@@ -85,6 +85,59 @@ function isMailStartLine(line: string): boolean {
 }
 
 // ============================================================
+// 关键新增：折叠行 header 识别
+// 处理形如：
+//   Assun
+//   to: RE: xxx
+// 或
+//   Subject
+//   : hello
+// 这类被邮件客户端拆断的字段名
+// ============================================================
+
+type HeaderHit = {
+    kind: HeaderKind;
+    /** 本次命中共消费了多少个原始行（1 或 2） */
+    consumed: number;
+};
+
+function peekJoinHeader(
+    lines: Array<{ line: string; raw: string }>,
+    i: number
+): HeaderHit | null {
+    const cur = lines[i].line;
+
+    // 1) 单行直接命中
+    const k0 = classifyHeader(cur);
+    if (k0) return { kind: k0, consumed: 1 };
+
+    // 2) 尝试与下一行拼接
+    if (i + 1 >= lines.length) return null;
+
+    const next = lines[i + 1].line;
+
+    // 避免把两行正文误拼成 header：要求当前行不含冒号、非空；
+    // 下一行也不能是完全空白
+    if (cur.trim().length === 0) return null;
+    if (next.trim().length === 0) return null;
+    // 如果当前行本身已经含冒号，说明它自成一个（可能是其它 header 或正文），
+    // 不再尝试与下一行拼接
+    if (/[:：]/.test(cur)) return null;
+
+    // 2a) 无空格直接拼接："Assun" + "to:" = "Assunto:"
+    const joined = cur + next;
+    const kj = classifyHeader(joined);
+    if (kj) return { kind: kj, consumed: 2 };
+
+    // 2b) 中间加空格拼接（少数客户端会在折行处留一个空格的等价物）
+    const joinedSpace = cur + ' ' + next;
+    const ks = classifyHeader(joinedSpace);
+    if (ks) return { kind: ks, consumed: 2 };
+
+    return null;
+}
+
+// ============================================================
 // 签名触发词 / 姓名
 // ============================================================
 
@@ -334,13 +387,16 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 }
 
 // ============================================================
-// 单块清洗（状态机）
+// 单块清洗（状态机 + 折叠行识别）
 // ============================================================
 
 const MAX_HEADER_LINES = 20;
 
 /**
  * 头部区只保留 From 行，其余 Header（Subject/To/Cc/Date/...）一律丢弃。
+ * 支持被邮件客户端拆断的字段名，例如：
+ *     Assun
+ *     to: RE: xxx
  * 遇到 Subject 或第一个非 Header 行即进入正文；正文区可选做签名过滤。
  */
 function cleanOneBlock(blockText: string, removeSignature: boolean): string {
@@ -350,60 +406,78 @@ function cleanOneBlock(blockText: string, removeSignature: boolean): string {
     let headerLineCount = 0;
     let signatureHit = false;
 
-    for (const item of rawLines) {
+    let i = 0;
+    while (i < rawLines.length) {
+        const item = rawLines[i];
         const { line, raw } = item;
 
-        if (signatureHit) continue;
-
-        if (state === 'scan') {
-            const kind = classifyHeader(line);
-            if (kind === 'from') {
-                out.push(raw);
-                state = 'header';
-                headerLineCount = 1;
-            } else {
-                out.push(raw);
-            }
+        if (signatureHit) {
+            i++;
             continue;
         }
 
-        if (state === 'header') {
-            const kind = classifyHeader(line);
+        // ---------- scan ----------
+        if (state === 'scan') {
+            const hit = peekJoinHeader(rawLines, i);
+            if (hit && hit.kind === 'from') {
+                for (let k = 0; k < hit.consumed; k++) {
+                    out.push(rawLines[i + k].raw);
+                }
+                i += hit.consumed;
+                state = 'header';
+                headerLineCount = 1;
+                continue;
+            }
+            // 不是 from 头，正常输出
+            out.push(raw);
+            i++;
+            continue;
+        }
 
-            if (kind === 'from') {
-                // 头部区出现多个 From（罕见）——依然保留
-                out.push(raw);
+        // ---------- header ----------
+        if (state === 'header') {
+            const hit = peekJoinHeader(rawLines, i);
+
+            if (hit && hit.kind === 'from') {
+                for (let k = 0; k < hit.consumed; k++) {
+                    out.push(rawLines[i + k].raw);
+                }
+                i += hit.consumed;
                 headerLineCount++;
                 continue;
             }
 
-            if (kind === 'subject') {
-                // Subject 出现 = 头部结束，丢弃该行并进入正文
+            if (hit && hit.kind === 'subject') {
+                // Subject 出现 = 头部结束，该行及其续行全部丢弃
+                i += hit.consumed;
                 state = 'body';
                 continue;
             }
 
-            if (kind !== null) {
-                // 其它 Header 一律丢弃
+            if (hit) {
+                // 其它 header 一律丢弃（含 Data / Para / Cc ...）
+                i += hit.consumed;
                 headerLineCount++;
                 if (headerLineCount > MAX_HEADER_LINES) {
-                    // 防御：头部过长视为正文开始，输出该行
+                    // 兜底：头部过长，退出 header 状态；但不输出当前行
                     state = 'body';
-                    out.push(raw);
                 }
                 continue;
             }
 
-            // 非 Header 行（空行 / 正文 / 分隔线）→ 进入正文并落到下方处理
+            // 当前行不是 header：进入正文，本行按正文规则处理
             state = 'body';
+            // 不 continue，让下方 body 分支处理这一行
         }
 
-        // ===== 正文处理 =====
+        // ---------- body ----------
         if (removeSignature && lineTriggerSignature(line)) {
             signatureHit = true;
+            i++;
             continue;
         }
         out.push(raw);
+        i++;
     }
 
     return out.join('');
