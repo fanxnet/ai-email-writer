@@ -228,6 +228,17 @@ function isHorizontalRuleLine(line: string): boolean {
     return sameCount / trimmed.length >= 0.9;
 }
 
+// ★ 新增：判断某行是不是"几乎就是邮箱"的 From 续行
+function looksLikeEmailContinuation(line: string): boolean {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.length > 200) return false;
+    // <addr@domain> 单独成行
+    if (/^<[^>]+>\s*$/.test(trimmed) && emailRx.test(trimmed)) return true;
+    // addr@domain 单独成行（无空格）
+    if (!/\s/.test(trimmed) && emailRx.test(trimmed)) return true;
+    return false;
+}
+
 function splitPreserveNewline(text: string): RawLine[] {
     const result: RawLine[] = [];
     if (text.length === 0) return result;
@@ -427,10 +438,7 @@ export function buildThreadBodyText(
     return selectedMails.map(b => b.text).join('');
 }
 
-function cleanOneMailBlock(
-    blockText: string,
-    removeSignature: boolean
-): string {
+function cleanOneMailBlock(blockText: string, removeSignature: boolean): string {
     const rawLines = splitPreserveNewline(blockText);
     const outLines: string[] = [];
 
@@ -452,6 +460,19 @@ function cleanOneMailBlock(
                 headerLineCount = 0;
 
                 outLines.push(rawLines[i].raw);
+
+                // ★ From 邮箱续行
+                let extra = 0;
+                while (
+                    extra < 3 &&
+                    i + extra + 1 < rawLines.length &&
+                    looksLikeEmailContinuation(rawLines[i + extra + 1].line)
+                ) {
+                    extra++;
+                    outLines.push(rawLines[i + extra].raw);
+                    headerLineCount++;
+                }
+                i += extra;
                 continue;
             }
         }
@@ -460,9 +481,8 @@ function cleanOneMailBlock(
             const line = rawLines[i].line;
             const trimmed = line.trim();
 
-            // 空行：结束"待续行"状态，header 模式下继续跳过
             if (trimmed === '') {
-                pendingWrappedHeader = false;      // ★ 改动 ①
+                pendingWrappedHeader = false;
                 continue;
             }
 
@@ -471,44 +491,27 @@ function cleanOneMailBlock(
             if (headerSpan > 0) {
                 headerLineCount += headerSpan;
                 afterRemovableHeader = true;
-
                 const logicalHeader = rawLines
-                    .slice(i, i + headerSpan)
-                    .map(x => x.line)
-                    .join('');
-
+                    .slice(i, i + headerSpan).map(x => x.line).join('');
                 const headerValue = logicalHeader
-                    .replace(/^[^:：]*[:：]/, '')
-                    .trim();
-
-                // ★ 改动 ②：值为空也算"待续行"
+                    .replace(/^[^:：]*[:：]/, '').trim();
                 pendingWrappedHeader =
-                    headerValue === '' ||
-                    /[,;\/-]$/.test(headerValue);
-
+                    headerValue === '' || /[,;\/-]$/.test(headerValue);
                 i += headerSpan - 1;
                 continue;
             }
 
-            // 折行续行
             if (
                 afterRemovableHeader &&
-                (
-                    (/^[ \t]+\S/.test(line) || pendingWrappedHeader) &&
-                    !isMailStartLine(line) &&
-                    !isKnownHeaderLine(line)
-                )
+                ((/^[ \t]+\S/.test(line) || pendingWrappedHeader) &&
+                 !isMailStartLine(line) &&
+                 !isKnownHeaderLine(line))
             ) {
                 headerLineCount++;
-                // ★ 改动 ③：不再重置 pendingWrappedHeader，
-                //   让它一直吞到空行或 From 行
                 continue;
             }
 
-            if (
-                isMailStartLine(line) &&
-                looksLikeRealMailStart(rawLines, i, 5)
-            ) {
+            if (isMailStartLine(line) && looksLikeRealMailStart(rawLines, i, 5)) {
                 fromFound = true;
                 inHeader = true;
                 afterRemovableHeader = false;
@@ -516,6 +519,19 @@ function cleanOneMailBlock(
                 headerLineCount = 0;
 
                 outLines.push(rawLines[i].raw);
+
+                // ★ 同样处理 header 区内再次出现的 From 邮箱续行
+                let extra = 0;
+                while (
+                    extra < 3 &&
+                    i + extra + 1 < rawLines.length &&
+                    looksLikeEmailContinuation(rawLines[i + extra + 1].line)
+                ) {
+                    extra++;
+                    outLines.push(rawLines[i + extra].raw);
+                    headerLineCount++;
+                }
+                i += extra;
                 continue;
             }
 
@@ -524,9 +540,7 @@ function cleanOneMailBlock(
             pendingWrappedHeader = false;
         }
 
-        if (removeSignature && lineTriggerSignature(rawLines[i].line)) {
-            break;
-        }
+        if (removeSignature && lineTriggerSignature(rawLines[i].line)) break;
 
         outLines.push(rawLines[i].raw);
 
