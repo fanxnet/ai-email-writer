@@ -1,53 +1,65 @@
+// ============================================================
+// 头部字段名（不含冒号，冒号由正则统一处理）
+// ============================================================
+
 const THREAD_BLOCK_STARTERS = [
     // English
-    'From:', 'From :', 'Sender:', 'Sender :',
+    'From', 'Sender',
     // German
-    'Von:', 'Von :',
-    // Spanish
-    'De:', 'De :', 'Remitente:', 'Remitente :',
-    // French
-    'Expéditeur:', 'Expéditeur :',
-    // Portuguese
-    'Remetente:', 'Remetente :',
+    'Von',
+    // Spanish / French / Portuguese
+    'De', 'Remitente', 'Expéditeur', 'Remetente',
     // Italian
-    'Mittente:', 'Mittente :', 'Da:', 'Da :',
+    'Mittente', 'Da',
     // Korean
-    '보낸 사람:', '보낸 사람 :', '보낸사람:', '보낸사람 :',
+    '보낸 사람', '보낸사람',
     // Japanese
-    '差出人：', '差出人:', '送信者：', '送信者:',
+    '差出人', '送信者',
     // Chinese
-    '发件人：', '发件人:', '来自：', '寄件人：', '寄件者：', '寄件者:',
+    '发件人', '来自', '寄件人', '寄件者',
     // Russian
-    'От:', 'От :', 'От кого:', 'От кого :',
+    'От', 'От кого',
 ];
 
 const HEADER_REMOVE_LIST = [
     // English
-    'Subject:', 'To:', 'Cc:', 'Bcc:', 'Sent:', 'Date:',
-    'Reply-To:', 'Message-ID:', 'MIME-Version:', 'Content-Type:',
-    'Content-Transfer-Encoding:', 'References:', 'In-Reply-To:',
+    'Subject', 'To', 'Cc', 'Bcc', 'Sent', 'Date',
+    'Reply-To', 'Message-ID', 'MIME-Version', 'Content-Type',
+    'Content-Transfer-Encoding', 'References', 'In-Reply-To',
     // German
-    'Betreff:', 'An:', 'Kopie:', 'Gesendet:', 'Datum:',
+    'Betreff', 'An', 'Kopie', 'Gesendet', 'Gesendet am', 'Datum',
     // French
-    'Objet :', 'À :', 'Cc :', 'Cci :', 'Envoyé :', 'Date :',
+    'Objet', 'À', 'Cci', 'Envoyé', 'Envoyé le',
     // Spanish
-    'Asunto:', 'Para:', 'Copia:', 'CCO:', 'Enviado:', 'Fecha:',
+    'Asunto', 'Para', 'Copia', 'CC', 'CCO', 'Enviado', 'Enviado el', 'Enviada el',
+    'Fecha', 'Fecha de envío', 'Fecha de enviado',
     // Portuguese
-    'Assunto:', 'Para:', 'Cópia:', 'CCO:', 'Enviado:', 'Data:', 'Enviada em:',
+    'Assunto', 'Cópia', 'Enviado em', 'Enviada em', 'Data', 'Data de envio',
     // Italian
-    'Oggetto:', 'A:', 'Cc:', 'Ccn:', 'Inviato:', 'Data:',
+    'Oggetto', 'A', 'Ccn', 'Inviato', 'Inviato il',
+    // Dutch
+    'Onderwerp', 'Aan', 'Verzonden', 'Verzonden op',
+    // Polish
+    'Temat', 'Do', 'DW', 'UDW', 'Wysłano', 'Wysłano dnia',
+    // Turkish
+    'Konu', 'Alıcı', 'Bilgi', 'Gizli', 'Gönderildi', 'Gönderilme tarihi', 'Tarih',
     // Russian
-    'Тема:', 'Кому:', 'Копия:', 'Скрытая копия:', 'Отправлено:', 'Дата:',
+    'Тема', 'Кому', 'Копия', 'Скрытая копия', 'Отправлено', 'Отправлено в', 'Дата',
     // Japanese
-    '件名：', '宛先：', '送信先：', 'Cc：', 'Bcc：', '送信日時：', '日付：',
+    '件名', '宛先', '送信先', '送信日時', '送信日', '日付',
     // Korean
-    '제목:', '받는 사람:', '참조:', '숨은참조:', '보낸 시간:', '날짜:',
+    '제목', '받는 사람', '참조', '숨은참조', '보낸 시간', '보낸 날짜', '날짜',
     // Chinese
-    '主题：', '主题:', '收件人：', '收件人:', '抄送：', '抄送:',
-    '密送：', '密送:', '发送时间：', '发送时间:', '日期：', '日期:',
+    '主题', '收件人', '抄送', '密送', '发送时间', '发送日期', '日期',
 ];
 
-const TECHNICAL_HEADER_RX = /^\s*(?:Reply-To|Bcc|Message-ID|MIME-Version|Content-Type|Content-Transfer-Encoding|References|In-Reply-To|Return-Path|Delivered-To|Auto-Submitted|Disposition-Notification-To|List-Unsubscribe|X-[A-Za-z0-9-]+)\s*[:：]/i;
+// 技术性 header（永远与业务无关，永远应被移除）
+const TECHNICAL_HEADER_RX =
+    /^\s*(?:Reply-To|Bcc|Message-ID|MIME-Version|Content-Type|Content-Transfer-Encoding|References|In-Reply-To|Return-Path|Delivered-To|Auto-Submitted|Disposition-Notification-To|List-Unsubscribe|X-[A-Za-z0-9-]+)\s*[:：]/i;
+
+// ============================================================
+// 签名触发词
+// ============================================================
 
 const SIGNATURE_TRIGGERS = [
     // English
@@ -56,9 +68,11 @@ const SIGNATURE_TRIGGERS = [
     // Portuguese
     'Atenciosamente', 'Atencionalmente', 'Saudações', 'Obrigado', 'Cordialmente', 'Grato', 'Grata',
     // Spanish
-    'Saludos', 'Saludos cordiales', 'Un cordial saludo', 'Atentamente', 'Saludos atentos', 'Muchas gracias', 'Quedo atento', 'Cordial Saludo',
+    'Saludos', 'Saludos cordiales', 'Un cordial saludo', 'Atentamente', 'Saludos atentos',
+    'Muchas gracias', 'Quedo atento', 'Cordial Saludo',
     // French
-    'Cordialement', 'Bien cordialement', 'Bien à vous', 'Respectueusement', 'Avec mes salutations distinguées', 'Merci',
+    'Cordialement', 'Bien cordialement', 'Bien à vous', 'Respectueusement',
+    'Avec mes salutations distinguées', 'Merci',
     // German
     'Mit freundlichen Grüßen', 'Viele Grüße', 'Liebe Grüße', 'Beste Grüße', 'Hochachtungsvoll',
     // Italian
@@ -71,7 +85,8 @@ const SIGNATURE_TRIGGERS = [
     'С уважением', 'Спасибо',
     // Common shorthand
     'Tks', 'Thks', 'B. Rgds', 'B.Rgds', 'B rgds', 'BRgds', 'Tks n rgds',
-    'Yours sincerely', 'Yours truly', 'Yours respectfully', 'Yours kindly', 'Yours faithfully', 'All the best',
+    'Yours sincerely', 'Yours truly', 'Yours respectfully', 'Yours kindly',
+    'Yours faithfully', 'All the best',
     // Chinese
     '顺颂商祺', '祝好', '此致', '敬礼',
 ];
@@ -85,6 +100,10 @@ const SIGNATURE_NAMES = [
     'Parisi Grand Smooth Logistics Ltd.',
     'With appreciation',
 ];
+
+// ============================================================
+// 类型 & 工具
+// ============================================================
 
 type MailBlock = {
     type: 'mail';
@@ -100,11 +119,43 @@ function escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const starterKeywords = THREAD_BLOCK_STARTERS.map(s => escapeRegExp(s)).join('|');
-const mailStartRx = new RegExp(`^[\\s\\u00A0]*(${starterKeywords})`, 'i');
+// ============================================================
+// ★ 核心改动：冒号统一由正则处理
+// ============================================================
 
-const extraHeaderRxItems = HEADER_REMOVE_LIST.map(s => escapeRegExp(s));
-const extraHeaderRegex = new RegExp(`^[\\s\\u00A0]*(?:${extraHeaderRxItems.join('|')})`, 'i');
+// 冒号类：半角 + 全角
+const COLON_CLASS = '[:：]';
+
+// 字段名与冒号之间允许出现任意空白（半角 / 全角 / 不换行空格）
+const HEADER_SEP_RX = `[\\s\\u00A0]*${COLON_CLASS}`;
+
+// 去重（安全兜底，防止手工合并时有重复）
+const UNIQUE_STARTERS = [...new Set(THREAD_BLOCK_STARTERS)];
+const UNIQUE_REMOVABLES = [...new Set(HEADER_REMOVE_LIST)];
+
+// mail 块起始（From 家族）
+const starterKeywords = UNIQUE_STARTERS
+    .slice()
+    .sort((a, b) => b.length - a.length)   // 长词优先，避免短词抢先
+    .map(escapeRegExp)
+    .join('|');
+
+const mailStartRx = new RegExp(
+    `^[\\s\\u00A0]*(?:${starterKeywords})${HEADER_SEP_RX}`,
+    'i'
+);
+
+// 可移除 header（Subject / To / Cc / Date / ...）
+const extraHeaderKeywords = UNIQUE_REMOVABLES
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join('|');
+
+const extraHeaderRegex = new RegExp(
+    `^[\\s\\u00A0]*(?:${extraHeaderKeywords})${HEADER_SEP_RX}`,
+    'i'
+);
 
 const emailRx = /[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
@@ -118,6 +169,10 @@ const multiSaluteRx = new RegExp(
     `(${salutePattern})\\s*(?:\\/|&|,|and|\\|)\\s*(${salutePattern})\\s*[,.!~;]*`,
     'i'
 );
+
+// ============================================================
+// header 名归一化（用于集合查找 / 跨行拼接）
+// ============================================================
 
 function normalizeHeaderProbe(line: string): string {
     return line
@@ -133,19 +188,21 @@ function headerNameOf(text: string): string {
     return colon >= 0 ? normalized.slice(0, colon) : normalized;
 }
 
+// 集合里现在是纯字段名（无冒号）
 const removableHeaderNames = new Set(
-    HEADER_REMOVE_LIST.map(headerNameOf)
+    UNIQUE_REMOVABLES.map(headerNameOf)
 );
+
+// ============================================================
+// 行级判定
+// ============================================================
 
 function isMailStartLine(line: string): boolean {
     return mailStartRx.test(line);
 }
 
 function isExtraHeaderLine(line: string): boolean {
-    if (extraHeaderRegex.test(line)) return true;
-
-    const name = headerNameOf(line);
-    return removableHeaderNames.has(name);
+    return extraHeaderRegex.test(line);
 }
 
 function isTechnicalHeaderLine(line: string): boolean {
@@ -210,10 +267,8 @@ function looksLikeRealMailStart(
     const line = lines[index]?.line ?? '';
     if (!isMailStartLine(line)) return false;
 
-    // Best case: sender line itself contains an email address.
     if (emailRx.test(line)) return true;
 
-    // Some mail clients split the email onto the next line.
     for (let offset = 1; offset <= lookAheadMax; offset++) {
         const idx = index + offset;
         if (idx >= lines.length) break;
@@ -265,18 +320,16 @@ function lineTriggerSignature(line: string): boolean {
 }
 
 /**
- * Detect a header split across two physical lines, e.g.
- *
+ * 识别跨两行的 header，例如：
  *   Assun
  *   to: RE: Quote
+ * 或：
+ *   Envia
+ *   do el: ...
  *
- * The returned index count tells the caller how many raw lines belong to the
- * header so the following line is not accidentally treated as body text.
+ * 返回本次占用的原始行数（1 或 2），0 表示不是 header。
  */
-function getHeaderSpan(
-    lines: RawLine[],
-    index: number
-): number {
+function getHeaderSpan(lines: RawLine[], index: number): number {
     if (index < 0 || index >= lines.length) return 0;
 
     const current = lines[index].line;
@@ -288,8 +341,7 @@ function getHeaderSpan(
 
         if (isKnownHeaderLine(joined)) return 2;
 
-        // Specifically handle a header name split inside the word:
-        // Assun + to: -> Assunto:
+        // 字段名在词中间被拆开：'Assun' + 'to:' = 'Assunto:'
         const joinedProbe = normalizeHeaderProbe(joined);
         for (const name of removableHeaderNames) {
             if (joinedProbe.startsWith(name + ':')) return 2;
@@ -298,6 +350,10 @@ function getHeaderSpan(
 
     return 0;
 }
+
+// ============================================================
+// 切块
+// ============================================================
 
 function splitMailBlocks(threadText: string): MailBlock[] {
     const rawLines = splitPreserveNewline(threadText);
@@ -317,16 +373,13 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 
         if (isMailStartLine(textLine)) {
             const isValidMailHeader = looksLikeRealMailStart(
-                rawLines,
-                i,
-                MAX_LOOK_AHEAD
+                rawLines, i, MAX_LOOK_AHEAD
             );
 
             if (isValidMailHeader) {
                 if (currentBlock !== null && currentBlock.length > 0) {
                     blocks.push(currentBlock);
                 }
-
                 currentBlock = [item.raw];
                 continue;
             }
@@ -354,6 +407,10 @@ function splitMailBlocks(threadText: string): MailBlock[] {
 
     return result;
 }
+
+// ============================================================
+// 对外 API
+// ============================================================
 
 export function buildThreadBodyText(
     bodytext: string,
@@ -402,9 +459,7 @@ function cleanOneMailBlock(
             const line = rawLines[i].line;
             const trimmed = line.trim();
 
-            // Important: your real mail data has blank lines between header
-            // fields. Do NOT use the first blank line as the end of headers.
-            // We simply skip blank separators while header mode is active.
+            // 头部字段之间允许有空行，不作为头部结束
             if (trimmed === '') {
                 continue;
             }
@@ -412,18 +467,21 @@ function cleanOneMailBlock(
             const headerSpan = getHeaderSpan(rawLines, i);
 
             if (headerSpan > 0) {
-                // Remove To / Cc / Sent / Subject / Date / Assunto / Data...
-                // and their split/folded physical lines.
                 headerLineCount += headerSpan;
                 afterRemovableHeader = true;
-                const logicalHeader = rawLines.slice(i, i + headerSpan).map(x => x.line).join('');
-                const headerValue = logicalHeader.replace(/^[^:：]*[:：]/, '').trim();
+                const logicalHeader = rawLines
+                    .slice(i, i + headerSpan)
+                    .map(x => x.line)
+                    .join('');
+                const headerValue = logicalHeader
+                    .replace(/^[^:：]*[:：]/, '')
+                    .trim();
                 pendingWrappedHeader = /[,;\/-]$/.test(headerValue);
                 i += headerSpan - 1;
                 continue;
             }
 
-            // Folded continuation of a removed header.
+            // 折行续行（被移除 header 的延续）
             if (
                 afterRemovableHeader &&
                 (
@@ -437,8 +495,7 @@ function cleanOneMailBlock(
                 continue;
             }
 
-            // Another sender line normally means a new mail block. Keep it
-            // rather than swallowing it as body text.
+            // 又遇到一个 From 行：保留（不吞掉）
             if (
                 isMailStartLine(line) &&
                 looksLikeRealMailStart(rawLines, i, 5)
@@ -453,7 +510,7 @@ function cleanOneMailBlock(
                 continue;
             }
 
-            // First normal non-header line = body starts here.
+            // 第一个非 header 非空行 = 正文开始
             inHeader = false;
             afterRemovableHeader = false;
             pendingWrappedHeader = false;
@@ -511,4 +568,3 @@ export function cleanThreadEmails(
     const finalResult = cleaned.join('');
     return finalResult.length ? finalResult : bodytext;
 }
-
