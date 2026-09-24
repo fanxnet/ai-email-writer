@@ -105,10 +105,10 @@ export async function regenerateImprovement(onStream?: (delta: string) => void):
 }
 
 /**
- * Accept the improved text — prepend to compose body (preserving original).
+ * Accept the improved text — replace the body in compose mode.
  * In read mode, copies to clipboard instead.
  */
-export async function acceptChanges(): Promise<'prepended' | 'copied'> {
+export async function acceptChanges(): Promise<'inserted' | 'copied'> {
   if (!improvedText) {
     throw new Error('No improved text to accept.');
   }
@@ -117,22 +117,12 @@ export async function acceptChanges(): Promise<'prepended' | 'copied'> {
 
   if (mode === 'compose') {
     await prependToComposeBody(improvedText);
-    return 'prepended';
+    return 'inserted';
   } else {
     // Read mode — copy to clipboard
     await copyToClipboard(improvedText);
     return 'copied';
   }
-}
-
-/**
- * Copy the improved text to clipboard (for manual pasting).
- */
-export async function copyImprovedText(): Promise<void> {
-  if (!improvedText) {
-    throw new Error('No improved text to copy.');
-  }
-  await copyToClipboard(improvedText);
 }
 
 /**
@@ -194,7 +184,7 @@ function getSelectedText(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Body prepend
+// Body replacement
 // ---------------------------------------------------------------------------
 
 function prependToComposeBody(text: string): Promise<void> {
@@ -205,11 +195,8 @@ function prependToComposeBody(text: string): Promise<void> {
       return;
     }
 
-    // Prepend with a separator to distinguish improved text from original
-    const content = text + '\n\n---\n\n';
-
     (item as any).body.prependAsync(
-      content,
+      text,
       { coercionType: Office.CoercionType.Text },
       (result: Office.AsyncResult<void>) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
