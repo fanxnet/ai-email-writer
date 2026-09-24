@@ -11,7 +11,7 @@
  */
 
 import { generateText } from '../services/ai-service';
-import { buildPrompt, truncateContext } from '../prompts/builder';
+import { buildPrompt, truncateContext, MAX_CONTENT_TOKENS } from '../prompts/builder';
 import { SUMMARIZE_THREAD_PROMPT } from '../prompts/templates';
 import {
   getCurrentEmailBody,
@@ -38,8 +38,6 @@ export interface SummarizeOptions {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Max tokens of email thread to send for summarization (larger than other features). */
-const MAX_CONTENT_TOKENS = 6000;
 
 // ---------------------------------------------------------------------------
 // State

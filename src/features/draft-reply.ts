@@ -14,7 +14,7 @@
 /* global Office */
 
 import { generateText } from '../services/ai-service';
-import { buildPrompt, truncateContext } from '../prompts/builder';
+import { buildPrompt, truncateContext, MAX_CONTENT_TOKENS } from '../prompts/builder';
 import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
@@ -52,9 +52,6 @@ export interface EmailContext {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/** Max tokens of original email to include in the reply prompt. */
-const MAX_CONTENT_TOKENS = 6000;
 
 const MAX_OUTPUT_TOKENS = 8192;
 /** Thread off: keep the current email plus the newest 2 replies. */

@@ -8,7 +8,7 @@
  */
 
 import { generateText } from '../services/ai-service';
-import { buildPrompt, truncateContext } from '../prompts/builder';
+import { buildPrompt, truncateContext, MAX_CONTENT_TOKENS } from '../prompts/builder';
 import { EXTRACT_ACTION_ITEMS_PROMPT } from '../prompts/templates';
 import {
   getCurrentEmailBody,
@@ -31,9 +31,6 @@ export interface ActionItem {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/** Max tokens of email content to send for action-item extraction. */
-const MAX_CONTENT_TOKENS = 6000;
 
 // ---------------------------------------------------------------------------
 // State
