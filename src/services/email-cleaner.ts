@@ -79,6 +79,7 @@ const SIGNATURE_TRIGGERS = [
     // Common shorthand
     'Tks', 'Thks', 'B. Rgds', 'B.Rgds', 'B rgds', 'BRgds', 'Tks n rgds',
     'Yours sincerely', 'Yours truly', 'Yours respectfully', 'Yours kindly', 'Yours faithfully', 'All the best',
+    'Meilleures Salutations',
     // Chinese
     '顺颂商祺', '祝好', '此致', '敬礼',
 ];
@@ -133,9 +134,9 @@ function escapeRegExp(str: string): string {
 const salutePattern = SIGNATURE_TRIGGERS
     .map(escapeRegExp)
     .join('|');
-// 复合链式签名：2个关键词由 / 或 & 等分隔符隔开即命中
+// 复合链式签名：2个关键词由 / 或 & | and , - 等分隔符隔开即命中
 const multiSaluteRx = new RegExp(
-    `(${salutePattern})\\s*(?:\\/|&|,|and|\\|)\\s*(${salutePattern})\\s*[,.!~;]*`,
+    `(${salutePattern})\\s*(?:\\/|&|,|and|-|\\|)\\s*(${salutePattern})\\s*[,.!~;]*`,
     'i'
 );
 
