@@ -196,7 +196,7 @@ function prependToComposeBody(text: string): Promise<void> {
     }
 
     (item as any).body.prependAsync(
-      text,
+      text + '\n\n---------\n',
       { coercionType: Office.CoercionType.Text },
       (result: Office.AsyncResult<void>) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
