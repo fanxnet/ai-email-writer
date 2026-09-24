@@ -69,6 +69,8 @@ let deepseekApiKey = '';
  * abort during backoff still stops the pending work. */
 let activeController: AbortController | null = null;
 
+let currentInitializedKey: string = '';
+
 export function initDeepSeekClient(apiKey: string): void {
   const trimmed = typeof apiKey === 'string' ? apiKey.trim() : '';
   if (!trimmed) {
@@ -78,7 +80,11 @@ export function initDeepSeekClient(apiKey: string): void {
       false,
     );
   }
+  if (currentInitializedKey === trimmed) {
+    return;
+  }
   deepseekApiKey = trimmed;
+  currentInitializedKey = trimmed;
 }
 
 /**

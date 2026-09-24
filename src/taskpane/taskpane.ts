@@ -1406,23 +1406,8 @@ Office.onReady((info) => {
       );
     }
 
-    // Load settings and initialize clients
+    // Load settings
     const settings = loadSettings();
-    try {
-      if (settings.aiProvider === 'deepseek') {
-        const apiKey = settings.deepseekApiKey || '';
-        if (apiKey) {
-          initDeepSeekClient(apiKey);
-        }
-      } else {
-        const apiKey = settings.geminiApiKey || (window as any).__AICompose_API_KEY__ || '';
-        if (apiKey) {
-          initGeminiClient(apiKey);
-        }
-      }
-    } catch {
-      // Client will be initialized when settings are saved
-    }
 
     // Populate feature defaults from settings
     const applySettingsToForms = (s: AIComposeSettings): void => {

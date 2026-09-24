@@ -123,10 +123,12 @@ const OVERALL_TIMEOUT_MS = 300_000; // Hard ceiling for the whole response.
 // ---------------------------------------------------------------------------
 
 let clientInstance: GoogleGenAI | null = null;
+let currentApiKey: string = '';
 
 /**
  * Initialise (or reinitialise) the Gemini client with the given API key.
  * Returns the `GoogleGenAI` instance for direct access if needed.
+ * Idempotent: if called with the same key, returns the existing instance.
  */
 export function initGeminiClient(apiKey: string): GoogleGenAI {
   if (!apiKey || apiKey.trim().length === 0) {
@@ -135,7 +137,11 @@ export function initGeminiClient(apiKey: string): GoogleGenAI {
       GeminiErrorCode.INVALID_API_KEY,
     );
   }
+  if (clientInstance && currentApiKey === apiKey) {
+    return clientInstance;
+  }
   clientInstance = new GoogleGenAI({ apiKey });
+  currentApiKey = apiKey;
   return clientInstance;
 }
 
