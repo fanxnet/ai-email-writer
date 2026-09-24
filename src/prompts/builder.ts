@@ -17,7 +17,8 @@ export type PromptVariables = Record<string, string>;
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
+/** Max tokens of original email to include in the prompt. */
+export const MAX_EMAILBODY_TOKENS = 6000;
 /**
  * Rough estimate: 1 token ≈ 4 characters for English text.
  * This is a conservative approximation used for truncation.

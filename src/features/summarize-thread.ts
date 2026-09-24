@@ -11,7 +11,7 @@
  */
 
 import { generateText } from '../services/ai-service';
-import { buildPrompt, truncateContext, MAX_CONTENT_TOKENS } from '../prompts/builder';
+import { buildPrompt, truncateContext, MAX_EMAILBODY_TOKENS } from '../prompts/builder';
 import { SUMMARIZE_THREAD_PROMPT } from '../prompts/templates';
 import {
   getCurrentEmailBody,
@@ -80,7 +80,7 @@ export async function summarizeThread(
     throw new Error('No email content to summarize. Please make sure an email is open.');
   }
 
-  const emailThread = truncateContext(rawThread, MAX_CONTENT_TOKENS);
+  const emailThread = truncateContext(rawThread, MAX_EMAILBODY_TOKENS);
 
   // Build length + style instructions
   const lengthAndStyle = buildLengthStyleHint(options.length, options.style);

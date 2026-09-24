@@ -14,7 +14,7 @@
 /* global Office */
 
 import { generateText } from '../services/ai-service';
-import { buildPrompt, truncateContext, MAX_CONTENT_TOKENS } from '../prompts/builder';
+import { buildPrompt, truncateContext, MAX_EMAILBODY_TOKENS } from '../prompts/builder';
 import { REPLY_PROMPT } from '../prompts/templates';
 import { getSetting, ReasoningMode, buildGoalText, buildRulesText, buildProfileText } from './settings';
 import { extractTextStyleFromHtml, buildStyledBodyHtml } from '../services/style-extractor';
@@ -144,7 +144,7 @@ export async function generateReply(
   emailBody = cleanThreadEmails(buildThreadBodyText(context.body ?? '', KEEP_REPLIES),true);
   }
   originalEmail += emailBody;
-  originalEmail = truncateContext(originalEmail, MAX_CONTENT_TOKENS);
+  originalEmail = truncateContext(originalEmail, MAX_EMAILBODY_TOKENS);
 
   // Resolve language: 'auto' means match the original email's language
   let language: string;
