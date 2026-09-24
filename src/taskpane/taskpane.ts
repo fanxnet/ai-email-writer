@@ -49,6 +49,7 @@ import {
   improveWriting,
   regenerateImprovement,
   acceptChanges,
+  copyImprovedText,
   generateDiffHtml,
   ImproveOptions,
   ImprovementFocus,
@@ -1171,8 +1172,8 @@ async function handleAcceptChanges(): Promise<void> {
     const btn = $('btn-accept-changes');
     if (btn) {
       const original = btn.innerHTML;
-      const msg = action === 'replaced'
-        ? '<i class="ms-Icon ms-Icon--CheckMark"></i> Replaced!'
+      const msg = action === 'prepended'
+        ? '<i class="ms-Icon ms-Icon--CheckMark"></i> Inserted!'
         : '<i class="ms-Icon ms-Icon--CheckMark"></i> Copied!';
       btn.innerHTML = msg;
       btn.classList.add('aic-btn--success');
@@ -1183,6 +1184,26 @@ async function handleAcceptChanges(): Promise<void> {
     }
   } catch (err: any) {
     showError(err.message || 'Failed to accept changes.');
+  }
+}
+
+async function handleCopyImproved(): Promise<void> {
+  hideError();
+
+  try {
+    await copyImprovedText();
+    const btn = $('btn-copy-improve');
+    if (btn) {
+      const original = btn.innerHTML;
+      btn.innerHTML = '<i class="ms-Icon ms-Icon--CheckMark"></i> Copied!';
+      btn.classList.add('aic-btn--success');
+      setTimeout(() => {
+        btn.innerHTML = original;
+        btn.classList.remove('aic-btn--success');
+      }, 1500);
+    }
+  } catch (err: any) {
+    showError(err.message || 'Failed to copy text.');
   }
 }
 
@@ -1769,6 +1790,7 @@ Office.onReady((info) => {
     $('btn-improve')?.addEventListener('click', handleImprove);
     $('btn-regenerate-improve')?.addEventListener('click', handleRegenerateImprove);
     $('btn-accept-changes')?.addEventListener('click', handleAcceptChanges);
+    $('btn-copy-improve')?.addEventListener('click', handleCopyImproved);
 
     // --- Extract ---
     $('btn-extract')?.addEventListener('click', handleExtract);

@@ -1022,7 +1022,7 @@
           Improve Writing
         </h2>
 
-        <p class="aic-hint">Select text in your email, or AI Compose will use the full body.</p>
+        <p class="aic-hint">Select text in your email, or AI Compose will use the newest body.</p>
 
         <div class="mb-lg">
           <label class="block text-sm font-medium text-aic-text-secondary mb-sm"
@@ -1101,10 +1101,18 @@
           <button
             id="btn-accept-changes"
             class="aic-btn aic-btn--primary flex-1"
-            title="Accept and replace the original text"
+            title="Insert improved text at the top of the email"
           >
             <i class="ms-Icon ms-Icon--Accept"></i>
             Accept Changes
+          </button>
+          <button
+            id="btn-copy-improve"
+            class="aic-btn aic-btn--secondary"
+            title="Copy improved text to clipboard"
+          >
+            <i class="ms-Icon ms-Icon--Copy"></i>
+            Copy
           </button>
           <button
             id="btn-regenerate-improve"

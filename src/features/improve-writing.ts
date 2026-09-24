@@ -105,10 +105,10 @@ export async function regenerateImprovement(onStream?: (delta: string) => void):
 }
 
 /**
- * Accept the improved text — replace the body in compose mode.
+ * Accept the improved text — prepend to compose body (preserving original).
  * In read mode, copies to clipboard instead.
  */
-export async function acceptChanges(): Promise<'replaced' | 'copied'> {
+export async function acceptChanges(): Promise<'prepended' | 'copied'> {
   if (!improvedText) {
     throw new Error('No improved text to accept.');
   }
@@ -116,13 +116,23 @@ export async function acceptChanges(): Promise<'replaced' | 'copied'> {
   const mode = getItemMode();
 
   if (mode === 'compose') {
-    await replaceComposeBody(improvedText);
-    return 'replaced';
+    await prependToComposeBody(improvedText);
+    return 'prepended';
   } else {
     // Read mode — copy to clipboard
     await copyToClipboard(improvedText);
     return 'copied';
   }
+}
+
+/**
+ * Copy the improved text to clipboard (for manual pasting).
+ */
+export async function copyImprovedText(): Promise<void> {
+  if (!improvedText) {
+    throw new Error('No improved text to copy.');
+  }
+  await copyToClipboard(improvedText);
 }
 
 /**
@@ -184,10 +194,10 @@ function getSelectedText(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Body replacement
+// Body prepend
 // ---------------------------------------------------------------------------
 
-function replaceComposeBody(text: string): Promise<void> {
+function prependToComposeBody(text: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const item = Office.context.mailbox.item;
     if (!item || !('body' in item)) {
@@ -195,14 +205,17 @@ function replaceComposeBody(text: string): Promise<void> {
       return;
     }
 
-    (item as any).body.setAsync(
-      text,
+    // Prepend with a separator to distinguish improved text from original
+    const content = text + '\n\n---\n\n';
+
+    (item as any).body.prependAsync(
+      content,
       { coercionType: Office.CoercionType.Text },
       (result: Office.AsyncResult<void>) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           resolve();
         } else {
-          reject(new Error(result.error?.message || 'Failed to replace body'));
+          reject(new Error(result.error?.message || 'Failed to prepend to body'));
         }
       },
     );
