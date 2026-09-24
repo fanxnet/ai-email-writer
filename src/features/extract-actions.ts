@@ -59,13 +59,13 @@ export async function extractActionItems(
   }
 
   const emailContent = truncateContext(emailBody, MAX_EMAILBODY_TOKENS);
-  const languageInstruction = language && language !== 'auto'
+  const extractLanguage = language && language !== 'auto'
     ? `Write the content of each field in ${language}.`
     : 'Write the content of each field in the same language as the email.';
 
   const prompt = buildPrompt(EXTRACT_ACTION_ITEMS_PROMPT, {
     EMAIL_CONTENT: emailContent,
-    LANGUAGE: languageInstruction,
+    EXTRACT_LANGUAGE: extractLanguage,
   });
 
   const raw = await generateText(prompt, {

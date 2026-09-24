@@ -114,7 +114,7 @@ const DEFAULT_SETTINGS: AIComposeSettings = {
   defaultModel: "gemini-flash-latest",
   defaultTone: "professional",
   defaultSummaryStyle: "bullets",
-  defaultLanguage: "English",
+  defaultLanguage: "Chinese (Simplified)",
   replyLanguage: "English",
   draftLanguage: "English",
   presetRules: {
