@@ -139,7 +139,7 @@ Requirements:
 /**
  * Pull tasks, deadlines, and responsibilities from emails.
  *
- * Placeholders: {{EMAIL_CONTENT}}
+ * Placeholders: {{EMAIL_CONTENT}}, {{LANGUAGE}}
  */
 export const EXTRACT_ACTION_ITEMS_PROMPT = `You are a professional email assistant.
 
@@ -149,12 +149,16 @@ Extract all action items, tasks, and deadlines from the following email:
 {{EMAIL_CONTENT}}
 ---
 
+{{LANGUAGE}}
+
 Requirements:
 - List each action item as a bullet point
 - For each item, identify:
   - **Task**: What needs to be done
   - **Owner**: Who is responsible (if mentioned)
   - **Deadline**: When it's due (if mentioned)
+- Keep the labels **Task**, **Owner**, and **Deadline** in English exactly as shown — do not translate the labels themselves
+- Only the content (task description, owner name, deadline value) should be written in the target language
 - If no action items are found, respond with "No action items found."
 - Only extract items explicitly stated or clearly implied in the email
 - Do not invent tasks that are not present`;

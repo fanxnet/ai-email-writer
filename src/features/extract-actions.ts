@@ -48,6 +48,7 @@ let lastRawResponse: string = '';
  */
 export async function extractActionItems(
   onStream?: (delta: string) => void,
+  language?: string,
 ): Promise<ActionItem[]> {
   const rawContent = await readEmailContent();
   const { buildThreadBodyText, cleanThreadEmails } = await import('../services/email-cleaner');
@@ -58,8 +59,13 @@ export async function extractActionItems(
   }
 
   const emailContent = truncateContext(emailBody, MAX_EMAILBODY_TOKENS);
+  const languageInstruction = language && language !== 'auto'
+    ? `Write the content of each field in ${language}.`
+    : 'Write the content of each field in the same language as the email.';
+
   const prompt = buildPrompt(EXTRACT_ACTION_ITEMS_PROMPT, {
     EMAIL_CONTENT: emailContent,
+    LANGUAGE: languageInstruction,
   });
 
   const raw = await generateText(prompt, {
@@ -76,8 +82,11 @@ export async function extractActionItems(
 /**
  * Re-extract action items from the same email.
  */
-export async function regenerateActions(onStream?: (delta: string) => void): Promise<ActionItem[]> {
-  return extractActionItems(onStream);
+export async function regenerateActions(
+  onStream?: (delta: string) => void,
+  language?: string,
+): Promise<ActionItem[]> {
+  return extractActionItems(onStream, language);
 }
 
 /**
