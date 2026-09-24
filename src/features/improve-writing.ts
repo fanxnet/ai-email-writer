@@ -80,7 +80,7 @@ export async function improveWriting(
 
   const result = await generateText(prompt, {
     temperature: 0.3,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 4096,
     onStream,
   });
 
@@ -149,8 +149,12 @@ async function readSourceText(): Promise<string> {
     }
   }
 
-  // Fall back to full body
-  return getCurrentEmailBody();
+  // Fall back to newest body (KEEP_REPLIES = 0)
+  const body = await getCurrentEmailBody();
+  const { buildThreadBodyText, cleanThreadEmails } = await import('../services/email-cleaner');
+  const KEEP_REPLIES = 0;
+  const emailBody = await cleanThreadEmails(buildThreadBodyText(body ?? '', KEEP_REPLIES),true);
+  return emailBody;
 }
 
 function getSelectedText(): Promise<string> {
