@@ -480,7 +480,7 @@ export function cleanThreadEmails(bodytext: string, removeSignature = true): str
         let blockContent = outLines.length ? outLines.join('') : block.text;
         if (i > 0) {
             const mailNumber = i + 1;
-            const separator = `\n--MAIL SPLIT MARKER-- #${mailNumber}\n`;
+            const separator = `\n==Mail #${mailNumber}==\n`;
             blockContent = separator + blockContent;
         }
         blockContent += "\n";

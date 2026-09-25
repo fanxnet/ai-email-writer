@@ -70,7 +70,7 @@ export const REPLY_PROMPT = `[1. Role & Core Goals]
 - Don't add a subject,sign-off or signature(e.g. "Regards", "Sincerely").
 
 [3.Original Email Context]
-The email thread is numbered sequentially top to bottom. #1 at the top is the newest email; the highest number at the bottom is the oldest.
+The email thread is split by "==Mail #N==", where #N is numbered sequentially from top to bottom. #1 at the top is the newest email; the highest number at the bottom is the oldest.
 
 {{ORIGINAL_EMAIL}}
 
