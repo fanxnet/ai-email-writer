@@ -52,13 +52,10 @@ export async function generateJson<T>(prompt: string, options: any = {}): Promis
 
   ensureClientInitialized(provider);
 
-  if (/prompt-test/i.test(prompt)) {
-    return getPromptText(prompt);
-  } 
-  else if (provider === 'deepseek') { 
-    return deepseekGenerateJson<T>(prompt, opts);
+  if (provider === 'deepseek') { 
+      return deepseekGenerateJson<T>(prompt, opts); 
   }
   else { 
-    return geminiGenerateJson<T>(prompt, opts);
+      return geminiGenerateJson<T>(prompt, opts);
   }
 }

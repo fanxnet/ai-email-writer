@@ -72,7 +72,7 @@ function makeSettings(overrides: Partial<AIComposeSettings> = {}): AIComposeSett
     activeCareerId: '',
     conversationContextEnabled: true,
     includeThread: false,
-    reasoningMode: 'off',
+    reasoningMode: 'fast',
     replyStyleMode: 'match-original',
     ...overrides,
   };

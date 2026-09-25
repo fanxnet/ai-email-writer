@@ -181,31 +181,31 @@ describe('generateText — success', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateText — reasoning mode', () => {
-  it('disables thinking for gemini-3 models when reasoning is off', async () => {
+  it('disables thinking for gemini-3 models when reasoning is fast', async () => {
     mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
 
-    await generateText('Test prompt', { reasoningMode: 'off' });
+    await generateText('Test prompt', { model: 'gemini-3.8-flash', reasoningMode: 'fast' });
 
     const config = mockGenerateContentStream.mock.calls[0][0].config;
     expect(config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
   });
 
-  it('uses thinkingBudget 0 for gemini-2.5 models when reasoning is off', async () => {
+  it('uses thinkingLevel MINIMAL for legacy model names when reasoning is fast', async () => {
     mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
 
-    await generateText('Test prompt', { model: 'gemini-2.5-pro', reasoningMode: 'off' });
+    await generateText('Test prompt', { model: 'gemini-2.5-pro', reasoningMode: 'fast' });
 
     const config = mockGenerateContentStream.mock.calls[0][0].config;
-    expect(config.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
   });
 
-  it('uses dynamic thinking for balanced mode', async () => {
+  it('uses thinkingLevel MEDIUM for balanced mode', async () => {
     mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
 
     await generateText('Test prompt', { model: 'gemini-2.5-pro', reasoningMode: 'balanced' });
 
     const config = mockGenerateContentStream.mock.calls[0][0].config;
-    expect(config.thinkingConfig).toEqual({ thinkingBudget: -1 });
+    expect(config.thinkingConfig).toEqual({ thinkingLevel: 'MEDIUM' });
   });
 
   it('uses HIGH thinking level for high mode on gemini-3 models', async () => {
@@ -217,13 +217,13 @@ describe('generateText — reasoning mode', () => {
     expect(config.thinkingConfig).toEqual({ thinkingLevel: 'HIGH' });
   });
 
-  it('falls back to thinkingBudget for ambiguous aliases like gemini-flash-latest', async () => {
+  it('uses thinkingLevel for ambiguous aliases like gemini-flash-latest', async () => {
     mockGenerateContentStream.mockReturnValue(streamOf(['Reply text.']));
 
-    await generateText('Test prompt', { model: 'gemini-flash-latest', reasoningMode: 'off' });
+    await generateText('Test prompt', { model: 'gemini-flash-latest', reasoningMode: 'fast' });
 
     const config = mockGenerateContentStream.mock.calls[0][0].config;
-    expect(config.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
   });
 });
 

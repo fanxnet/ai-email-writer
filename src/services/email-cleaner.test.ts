@@ -6,7 +6,7 @@
  * placeholders are stripped while a compact sender attribution is kept.
  */
 
-import { cleanThreadEmails } from './email-cleaner';
+import { cleanThreadEmails, buildThreadBodyText } from './email-cleaner';
 
 describe('cleanThreadEmails', () => {
   it('returns blank input unchanged', () => {
@@ -267,7 +267,8 @@ describe('cleanThreadEmails', () => {
     });
 
     it('keeps only the newest messages when keepReplies is given', () => {
-      const result = cleanThreadEmails(thread, 2);
+      // buildThreadBodyText keeps the newest message + N quoted replies
+      const result = cleanThreadEmails(buildThreadBodyText(thread, 1), true);
       expect(result).toContain('Hi Bob, thanks for the update.');
       expect(result).toContain('From: Bob Johnson <bob@acme.com>');
       expect(result).toContain('Please find attached the Q3 report.');

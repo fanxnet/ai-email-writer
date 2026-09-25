@@ -21,13 +21,13 @@ import { getSetting, ReasoningMode, MAX_RETRIES, INITIAL_RETRY_DELAY_MS, RETRY_B
 export interface GenerateOptions {
   /** Controls randomness. Lower = more deterministic. Range: 0.0–2.0. Default: 1.0 */
   temperature?: number;
-  /** Maximum number of tokens in the response. Default: 2048 */
+  /** Maximum number of tokens in the response. Default: 4096 */
   maxOutputTokens?: number;
   /** Nucleus sampling. Range: 0.0–1.0. Default: 0.95 */
   topP?: number;
   /** Top-K sampling. Default: 40 */
   topK?: number;
-  /** Which Gemini model to use. Default: user's saved setting or 'gemini-3.8-flash' */
+  /** Which Gemini model to use. Default: user's saved setting or 'gemini-flash-lite-latest' */
   model?: string;
   /** Override the adaptive request timeout (ms). */
   timeoutMs?: number;
@@ -36,7 +36,7 @@ export interface GenerateOptions {
   /** Number of automatic retries for transient failures. Default: 3. */
   maxRetries?: number;
   /** Reasoning effort. When omitted, falls back to the user's saved
-   * `reasoningMode` setting ('off' by default). */
+   * `reasoningMode` setting ('fast' by default). */
   reasoningMode?: ReasoningMode;
 }
 
@@ -44,9 +44,9 @@ export interface GenerateOptions {
 export interface GenerateJsonOptions {
   /** Controls randomness. Default: 0.1 */
   temperature?: number;
-  /** Maximum number of tokens in the response. Default: 200 */
+  /** Maximum number of tokens in the response. Default: 4096 */
   maxOutputTokens?: number;
-  /** Which Gemini model to use. Default: user's saved setting or 'gemini-3.8-flash' */
+  /** Which Gemini model to use. Default: user's saved setting or 'gemini-flash-lite-latest' */
   model?: string;
   /** System instruction for the model. */
   systemInstruction?: string;
@@ -97,14 +97,8 @@ export { Type };
 // Constants
 // ---------------------------------------------------------------------------
 
+/** Fallback model when no user setting is available. */
 const FALLBACK_MODEL = 'gemini-flash-lite-latest';
-
-/**
- * Fast, non-thinking model for simple extraction/utility tasks
- * (translation, action items, summarization, language detection).
- * These tasks don't benefit from deep reasoning and need low latency.
- */
-export const FAST_MODEL = 'gemini-flash-lite-latest';
 
 const DEFAULT_TEMPERATURE = 1.0;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
@@ -133,7 +127,7 @@ let currentApiKey: string = '';
 export function initGeminiClient(apiKey: string): GoogleGenAI {
   if (!apiKey || apiKey.trim().length === 0) {
     throw new GeminiError(
-      'API key is required. Please set GEMINI_API_KEY in your .env file.',
+      'API key is required. Please set your Gemini API key in Settings.',
       GeminiErrorCode.INVALID_API_KEY,
     );
   }
@@ -191,7 +185,7 @@ export async function generateText(
             maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
             topP: options.topP ?? DEFAULT_TOP_P,
             topK: options.topK ?? DEFAULT_TOP_K,
-            thinkingConfig: resolveThinkingConfig(modelName, reasoningMode),
+            thinkingConfig: resolveThinkingConfig(reasoningMode),
           },
         }),
         options.onStream,
@@ -243,10 +237,10 @@ export async function generateJson<T = Record<string, unknown>>(
             responseMimeType: 'application/json',
             responseSchema: options.responseSchema,
             systemInstruction: options.systemInstruction,
-            // Disable thinking for structured JSON — thinking models burn
-            // tokens from the maxOutputTokens budget on internal reasoning,
-            // leaving too few for the actual JSON response.
-            thinkingConfig: resolveThinkingConfig(modelName, reasoningMode),
+            // Thinking follows the resolved reasoning mode — structured JSON
+            // output is governed by the same fast/balanced/high setting as
+            // plain text generation.
+            thinkingConfig: resolveThinkingConfig(reasoningMode),
           },
         }),
         options.onStream,
@@ -366,31 +360,15 @@ async function collectModelStream(
 /**
  * Map a normalized ReasoningMode onto the model's native thinking config.
  *
- * Gemini 2.5 series uses `thinkingBudget` (0 = disabled, -1 = dynamic, or an
- * explicit token count). Versioned Gemini 3 models (e.g. gemini-3.5-flash)
- * use `thinkingLevel` (LOW/MEDIUM/HIGH).
- *
- * Ambiguous aliases such as `gemini-flash-latest` / `gemini-flash-lite-latest`
- * do NOT reliably accept `thinkingLevel` (some reject `MINIMAL`), so for those
- * we fall back to the broadly-compatible `thinkingBudget` knob, which is also
- * what `generateJson` already sends and is accepted across model families.
- *
- * Known limits (documented by Google):
- *  - Gemini 3 Flash / Flash-Lite cannot fully disable thinking; MINIMAL is the
- *    lowest level and still permits minimal reasoning on complex tasks.
- *  - Gemini 2.5 Pro cannot disable thinking; `thinkingBudget: 0` is best-effort.
+ * Only Gemini 3+ models are supported — they all use the `thinkingLevel`
+ * knob (MINIMAL / MEDIUM / HIGH). MINIMAL is the lowest level: Gemini 3
+ * Flash / Flash-Lite cannot fully disable thinking, so "fast" maps to
+ * MINIMAL rather than turning thinking off.
  */
-function resolveThinkingConfig(
-  modelName: string,
-  reasoningMode: ReasoningMode,
-): { thinkingBudget?: number; thinkingLevel?: ThinkingLevel } {
-  if (reasoningMode === 'fast') {
-    return { thinkingLevel: ThinkingLevel.LOW };
-  }
-  if (reasoningMode === 'high') {
-    return { thinkingLevel: ThinkingLevel.HIGH };
-  }
-  return { thinkingLevel: ThinkingLevel.MEDIUM };
+function resolveThinkingConfig(reasoningMode: ReasoningMode): { thinkingLevel?: ThinkingLevel } {
+  if (reasoningMode === 'fast') return { thinkingLevel: ThinkingLevel.MINIMAL };
+  if (reasoningMode === 'high') return { thinkingLevel: ThinkingLevel.HIGH };
+  return { thinkingLevel: ThinkingLevel.MEDIUM }; // balanced
 }
 
 /**
@@ -418,7 +396,8 @@ function emptyResponseError(finishReason?: string): GeminiError {
 }
 
 /** Build a typed timeout error for one of the health-monitoring tiers. */
-function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): GeminiError {  let message: string;
+function streamTimeoutError(kind: 'connect' | 'stall' | 'overall'): GeminiError {
+  let message: string;
   if (kind === 'connect') {
     message = `No response from the model within ${CONNECT_TIMEOUT_MS / 1000}s — check your connection and try again.`;
   } else if (kind === 'stall') {
@@ -513,22 +492,23 @@ function classifyError(error: unknown): GeminiError {
     );
   }
 
+  // Quota exceeded (must run before the generic 429 rate-limit branch below,
+  // otherwise this branch is unreachable)
+  if (statusCode === 429 && /quota/i.test(message)) {
+    return new GeminiError(
+      'API quota exceeded. Check your billing and quota settings in the Google Cloud Console.',
+      GeminiErrorCode.QUOTA_EXCEEDED,
+      false,
+      429,
+    );
+  }
+
   // Rate limited
   if (statusCode === 429 || /rate.?limit/i.test(message) || /too many requests/i.test(message)) {
     return new GeminiError(
       'Gemini API rate limit reached. Please wait a moment and try again.',
       GeminiErrorCode.RATE_LIMITED,
       true,
-      429,
-    );
-  }
-
-  // Quota exceeded
-  if (statusCode === 429 && /quota/i.test(message)) {
-    return new GeminiError(
-      'API quota exceeded. Check your billing and quota settings in the Google Cloud Console.',
-      GeminiErrorCode.QUOTA_EXCEEDED,
-      false,
       429,
     );
   }

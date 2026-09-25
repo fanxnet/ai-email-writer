@@ -1171,8 +1171,8 @@ async function handleAcceptChanges(): Promise<void> {
     const btn = $('btn-accept-changes');
     if (btn) {
       const original = btn.innerHTML;
-      const msg = action === 'replaced'
-        ? '<i class="ms-Icon ms-Icon--CheckMark"></i> Replaced!'
+      const msg = action === 'inserted'
+        ? '<i class="ms-Icon ms-Icon--CheckMark"></i> Inserted at top!'
         : '<i class="ms-Icon ms-Icon--CheckMark"></i> Copied!';
       btn.innerHTML = msg;
       btn.classList.add('aic-btn--success');

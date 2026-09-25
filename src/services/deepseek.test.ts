@@ -143,10 +143,10 @@ describe('generateText', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('disables thinking by default (reasoning off)', async () => {
+  it('disables thinking by default (reasoning fast)', async () => {
     mockFetch.mockResolvedValue(sseResponse([delta('Hello '), delta('there!'), DONE]));
 
-    await generateText('Say hi', { model: 'deepseek-v4-flash' });
+    await generateText('Say hi', { model: 'deepseek-flash' });
 
     const [, init] = mockFetch.mock.calls[0];
     const body = JSON.parse((init as RequestInit).body as string);
@@ -157,7 +157,7 @@ describe('generateText', () => {
   it('enables max reasoning when reasoning mode is high', async () => {
     mockFetch.mockResolvedValue(sseResponse([delta('Hi'), DONE]));
 
-    await generateText('Say hi', { model: 'deepseek-v4-flash', reasoningMode: 'high' });
+    await generateText('Say hi', { model: 'deepseek-flash', reasoningMode: 'high' });
 
     const [, init] = mockFetch.mock.calls[0];
     const body = JSON.parse((init as RequestInit).body as string);
@@ -168,7 +168,7 @@ describe('generateText', () => {
   it('reports a truncated response when finish_reason is length and text is empty', async () => {
     mockFetch.mockResolvedValue(sseResponse([finish('length'), DONE]));
 
-    await expect(generateText('Say hi', { model: 'deepseek-v4-flash' })).rejects.toMatchObject({
+    await expect(generateText('Say hi', { model: 'deepseek-flash' })).rejects.toMatchObject({
       code: DeepSeekErrorCode.EMPTY_RESPONSE,
       message: expect.stringContaining('token limit'),
     });
@@ -177,7 +177,7 @@ describe('generateText', () => {
   it('reports a content-filtered response when finish_reason is content_filter', async () => {
     mockFetch.mockResolvedValue(sseResponse([finish('content_filter'), DONE]));
 
-    await expect(generateText('Say hi', { model: 'deepseek-v4-flash' })).rejects.toMatchObject({
+    await expect(generateText('Say hi', { model: 'deepseek-flash' })).rejects.toMatchObject({
       code: DeepSeekErrorCode.EMPTY_RESPONSE,
       message: expect.stringContaining('content filters'),
     });
