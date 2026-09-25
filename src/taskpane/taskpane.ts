@@ -310,7 +310,7 @@ function updateModelDropdown(provider: string, currentModel?: string): void {
   if (currentModel) {
     modelSelect.value = currentModel;
   } else {
-    modelSelect.value = provider === 'deepseek' ? 'deepseek-flash' : 'gemini-flash-latest';
+    modelSelect.value = provider === 'deepseek' ? 'deepseek-flash' : 'gemini-flash-lite-latest';
   }
 }
 
