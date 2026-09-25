@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/banner.png?v=2" alt="AI Email Writer Banner" width="100%" />
-</p>
-
 <h1 align="center">AI Email Writer (AI Compose)</h1>
 <p align="center">
   <strong>An open-source AI email writer and composer for Microsoft Outlook, powered by Google Gemini.</strong>
@@ -175,5 +171,5 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ---
 
 <p align="center">
-  Made with ❤️ by <a href="https://rizonesoft.com">Rizonesoft</a>
+  Thanks to ❤️  <a href="https://rizonesoft.com">Rizonesoft</a>
 </p>
