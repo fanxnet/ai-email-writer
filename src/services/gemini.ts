@@ -361,12 +361,12 @@ async function collectModelStream(
  * Map a normalized ReasoningMode onto the model's native thinking config.
  *
  * Only Gemini 3+ models are supported — they all use the `thinkingLevel`
- * knob (MINIMAL / MEDIUM / HIGH). MINIMAL is the lowest level: Gemini 3
+ * knob (LOW / MEDIUM / HIGH). LOW is the lowest level: Gemini 3
  * Flash / Flash-Lite cannot fully disable thinking, so "fast" maps to
- * MINIMAL rather than turning thinking off.
+ * LOW rather than turning thinking off.
  */
 function resolveThinkingConfig(reasoningMode: ReasoningMode): { thinkingLevel?: ThinkingLevel } {
-  if (reasoningMode === 'fast') return { thinkingLevel: ThinkingLevel.MINIMAL };
+  if (reasoningMode === 'fast') return { thinkingLevel: ThinkingLevel.LOW };
   if (reasoningMode === 'high') return { thinkingLevel: ThinkingLevel.HIGH };
   return { thinkingLevel: ThinkingLevel.MEDIUM }; // balanced
 }
