@@ -53,7 +53,7 @@ export interface EmailContext {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_OUTPUT_TOKENS = 8192;
+const MAX_OUTPUT_TOKENS = 20480;
 /** Thread off: keep the current email plus the newest 2 replies. */
 export const MIN_KEEP_REPLIES = 2;
 
