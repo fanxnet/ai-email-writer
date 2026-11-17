@@ -101,7 +101,7 @@ export { Type };
 const FALLBACK_MODEL = 'gemini-flash-lite-latest';
 
 const DEFAULT_TEMPERATURE = 1.0;
-const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+const DEFAULT_MAX_OUTPUT_TOKENS = 5120;
 const DEFAULT_TOP_P = 0.95;
 const DEFAULT_TOP_K = 40;
 

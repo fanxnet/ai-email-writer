@@ -25,7 +25,7 @@ const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 
 /** Fallback model when neither options nor settings provide one. */
 const DEFAULT_MODEL = 'deepseek-flash';
-const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+const DEFAULT_MAX_OUTPUT_TOKENS = 5120;
 
 // ---------------------------------------------------------------------------
 // Types

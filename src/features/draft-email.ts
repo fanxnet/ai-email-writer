@@ -234,12 +234,12 @@ function getLengthHint(length: string): string {
 function getMaxTokensForReasoning(reasoningMode: string): number {
   switch (reasoningMode) {
     case 'fast':
-      return 2048;
+      return 2560;
     case 'high':
-      return 8192;
+      return 10240;
     case 'balanced':
     default:
-      return 4096;
+      return 5120;
   }
 }
 

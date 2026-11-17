@@ -81,7 +81,7 @@ export async function translateEmail(
 
   const translated = await generateText(prompt, {
     temperature: 0.3,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 5120,
     onStream,
   });
 

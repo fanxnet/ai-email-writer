@@ -186,9 +186,9 @@ function getMaxTokensForLength(length: SummaryLength): number {
     case 'brief':
       return 1024;
     case 'detailed':
-      return 4096;
+      return 5120;
     case 'standard':
     default:
-      return 2048;
+      return 2560;
   }
 }
